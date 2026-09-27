@@ -145,3 +145,25 @@ boot lot: shoal-01
 - **`window.chomp` 里 `solve()` / `recomputeBook()` 会在浏览器现场重解**，这是给审计用的，
   不是点击路径 —— 点击只走 `book.lookup`。已在 DESIGN §4 写明边界。
 - 音效、动画过渡、巧克力块的贴图素材：一律没有（零二进制资产是硬约束）。
+
+## 线上验收（GitHub Pages，主代理 2026-09-27 实抓）
+
+发布 sha `cb80ee9`，CI trigger `6929c2f`。主代理门禁实跑：`npm run check` rc=0；
+node **165 / 0 fail**；浏览器 **85 / 0 fail** 且 `=== ALL GREEN ===`；zero-deps、0 二进制资产、
+core purity clean、无密钥样式串。线上资源：
+
+| 资源 | 结果 |
+| --- | --- |
+| `/` | 200 / 4,091 B |
+| `js/main.js` | 200 / 17,550 B |
+| `css/game.css` | 200 / 4,582 B |
+| `js/data/lots.js` | 200 / 15,266 B |
+| `<title>` | 与 README 首行一致 |
+
+**发布前主代理改动了本仓代码，必须记录**：`js/core/shapes.js` 的 `biteSize` 与 `squareShape`
+被删除，因为门禁以 `ghostExports` 拒绝本仓，而全仓（`js` `test` `tools`，含 shapes.js 自身）
+对这两个名字零引用，三份文档也从未提到它们。值得单独记一条的是：
+`biteSize` 上方的注释写着"Used by the view to shade the preview and by the tests to prove
+a bite is not silently smaller than what was drawn"——这句话**与事实不符**，视图与测试都没有调用它。
+因此本仓的处理原则是"以引用检索为准，不以注释自证为准"。若这两者确实该被使用，
+正确做法是把预览逻辑改为调用它，而不是留着一条死代码与一段真陈述。
