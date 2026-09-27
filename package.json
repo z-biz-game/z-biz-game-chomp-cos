@@ -1,0 +1,39 @@
+{
+  "name": "chomp-cos",
+  "version": "1.0.0",
+  "description": "毒格巧克力 Chomp — 浏览器原生巧克力毒块博弈。每个局面的必胜/必败与必胜口数由序理想上的穷举记忆化 minimax 量出，两行情形与公开刻画 (k,k-1) 逐位对齐。",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs 5201",
+    "electron": "electron .",
+    "bake": "node tools/bake.mjs",
+    "check": "for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check \"$f\" || exit 1; done && echo OK",
+    "unit": "for f in test/*.test.mjs; do node \"$f\" || exit 1; done",
+    "test": "npm run check && npm run unit",
+    "verify": "bash tools/verify.sh"
+  },
+  "keywords": [
+    "game",
+    "puzzle",
+    "chomp",
+    "chocolate",
+    "impartial-game",
+    "minimax",
+    "young-diagram",
+    "zero-dependency",
+    "electron"
+  ],
+  "author": "z-biz-game",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "build": {
+    "appId": "com.zbiz.chomp",
+    "productName": "Chomp",
+    "mac": { "category": "public.app-category.puzzle-games" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" }
+  }
+}

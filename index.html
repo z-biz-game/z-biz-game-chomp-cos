@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#241710">
+<meta name="description" content="毒格巧克力 CHOMP：网格巧克力，左上角有毒。每次咬掉一格连同它右下方的全部，被迫咬到毒格的人输。每一关的必胜/必败与必胜口数都是穷举 minimax 量出来的，屏幕上同时印着局面数。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%235a351c'/%3E%3Crect x='3' y='3' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='17' y='3' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='3' y='17' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='17' y='17' width='12' height='12' rx='3' fill='%23c9f2a0'/%3E%3C/svg%3E">
+<title>毒格巧克力 · CHOMP</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<header class="topbar">
+  <h1 class="brand"><span class="brand-mark">▦</span>毒格巧克力<small>CHOMP</small></h1>
+  <nav class="modes" id="modes" aria-label="模式">
+    <button type="button" data-mode="campaign">战役</button>
+    <button type="button" data-mode="daily">每日</button>
+    <button type="button" data-mode="random">随机</button>
+  </nav>
+  <p class="totals" id="totals"></p>
+</header>
+
+<main class="stage">
+  <section class="board">
+    <canvas id="board" aria-label="巧克力棋盘"></canvas>
+    <p class="hint-line" id="hintline"></p>
+    <div class="curtain" id="curtain" hidden>
+      <div class="curtain-card">
+        <p class="stars" id="stars"></p>
+        <h2 id="verdict"></h2>
+        <p class="tally" id="tally"></p>
+        <div class="curtain-actions">
+          <button type="button" id="again">再来一次</button>
+          <button type="button" id="next" class="primary">下一关</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <p class="crumbs" id="crumbs"></p>
+    <dl class="readout" id="readout"></dl>
+    <div class="controls">
+      <button type="button" id="hint">提示一口</button>
+      <button type="button" id="undo">撤销</button>
+      <button type="button" id="restart">重开</button>
+      <button type="button" id="share">分享这一局</button>
+    </div>
+    <p class="legend">在棋盘上按下并拖动：高亮的右下方就是这一口会咬掉的区域，松口即咬。<b>左上角带骷髅的是毒格</b>，不能主动咬。</p>
+    <details class="drawer" id="drawer">
+      <summary>这一局的证明 <span id="proofcount"></span></summary>
+      <ol class="proof" id="proof"></ol>
+      <p class="proof-more" id="proofmore"></p>
+    </details>
+    <details class="about">
+      <summary>屏幕上的数字从哪来</summary>
+      <p>本仓是双人 impartial 博弈，没有“最短解步数”可量。这里的难度是<b>博弈论价值</b>：
+      <code>js/core/solve.js</code> 对可达局面集（序理想）做穷举 + 记忆化 minimax，
+      <b>必胜/必败</b>与<b>必胜口数 k</b>都是那张表的读数；<code>局面数</code>就是这张表覆盖了多少个局面。
+      两行情形的必败局恰好是公开刻画 <code>(k, k-1)</code>，单行 1..9 的判定向量也被逐位复现 —— 见
+      <code>test/anchor.test.mjs</code>。</p>
+      <p>对手不搜索：它只查 <code>tools/bake.mjs</code> 烘进 <code>js/data/lots.js</code> 的那张棋书
+      （宇宙里 419 个局面，36 个必败）。越出棋书的局面查表会<b>抛异常</b>，不会现场搜索。</p>
+      <p>复现：<code>node tools/bake.mjs</code> 重烘并重验，<code>node --test test/</code> 复算所有印着的数字。</p>
+      <p class="save">成绩只存在这台设备的浏览器里。<button type="button" id="wipe">清空存档</button></p>
+    </details>
+  </aside>
+</main>
+
+<p class="toast" id="toast" hidden></p>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

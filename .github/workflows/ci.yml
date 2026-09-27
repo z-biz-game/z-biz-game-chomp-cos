@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The rule model, the solver, the book and the shipped campaign are all pure ES modules: no
+  # browser, no install step. Two rows are the reason this job exists:
+  #   * anchor.test.mjs — the exhaustive P/N table is compared square by square against the
+  #     published two-row characterisation (the P-positions are exactly the staircase (k, k-1)
+  #     for k = 2..9) and against the single-row outcome vector for widths 1..9, with the
+  #     expectations written as literals in test/fixture.mjs;
+  #   * library.test.mjs — re-solves every lot in js/data/lots.js from its serialised shape, so
+  #     a hand-edited winner, k or states count fails the build instead of shipping.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f"; done
+      - name: Suites
+        run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+
+  # The shell is only proven by driving a real page with real mouse events: the canvas hit test,
+  # the refused-poison-square rule and the save file all live behind `window.chomp`.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Headless playtest
+        env:
+          SKIP_UNIT: 1
+          WD_TIMEOUT: 240
+        run: bash tools/verify.sh
