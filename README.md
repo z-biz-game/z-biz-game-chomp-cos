@@ -1,65 +1,348 @@
 # 毒格巧克力 · CHOMP
 
-网格巧克力，**左上角那格有毒**。轮流咬：一轮咬掉某格，连同它**右下方**的全部格子。
-谁被迫咬到毒格谁输。对手查的是穷举表，不是启发式 —— 你点错的每一口都写在证明里。
+网格巧克力，**左上角那一格有毒**：两人轮流咬，每一口选中一格，连同它**右下方**的全部格子一起带走；
+被迫咬到毒格的人输。这个仓交付的是这一条规则的完整实现 + 一张**穷举出来的判定表**：
+屏幕上印的「必胜/必败」「首口 k 个」「随机一口赢率」「局面数」全部是
+`js/core/solve.js` 在可达局面集（序理想）上跑穷举 + 记忆化 minimax 量出来的读数，
+对手（`js/core/book.js`）查的也是同一张表，查不到就抛异常而不是现场搜索。
+出货的每一关都还额外被一条**独立路线**（该关自己从零重建的表）复算过一遍才写进
+`js/data/lots.js`（`tools/bake.mjs:89-101`）。
 
-## 玩法
+规则的**出处**这一栏，本仓给不出这一族常见的「日英双源」：玩法四条（毒格在左上、咬右下方整块、
+轮流、被迫咬毒者输）在 `index.html:7`（meta description 一句写完）、`index.html:49`（画布下那句操作说明，
+含「骷髅格不能主动咬」）、`js/core/shapes.js:1-19`、`js/core/game.js:6-11`、`DESIGN.md:20-28`
+里全是**仓内自述**，全仓被点名引用的外部结论只有一处 —— 两行情形的必败刻画，
+写在 `test/fixture.mjs:110-112`（"the classical Chomp result for 2×n bars (Tweed 1908)"）与
+`js/core/solve.js:219-223`（"Tweed's theorem, the classical textbook result"）。
+**没有 URL、没有页码、没有日文源**；但它不是装饰：那条刻画以字面量形式钉在
+`test/fixture.mjs:114`，被 `test/anchor.test.mjs` 逐位对账（见 §三）。
 
-- 开局是一根巧克力（`r` 行，行长非增）。每次在棋盘上**按下并拖动**，高亮出来的右下方区域就是这一口会带走的部分，松口即咬。
-- 左上角的骷髅格**不能主动咬**：点它不计数，屏幕会说一句话。只剩毒格时轮到谁，谁就输。
-- 你先手（本仓所有题都是"先手必胜"的形状）。对手回答完之后，面板会印出当前局面对当前行动者是**必胜**还是**必败**。
-- 提示按钮说的是真话：有胜口就给出口的位置，没胜口就直说"已经必败"。
+本文只写**本轮复跑量出来的事实**：命令是 `npm test`（= `npm run check` + `npm run unit`，`package.json:14`），
+机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。
+**墙钟数字不进本文**：这台机器上同时跑着别的代理的闸，毫秒读数复跑不出同一个值，写死它就是一条注定过期的承诺 —— 只有整数计数当事实写，凡是要说成本的地方一律引那条**上限断言**。量不到的事一律进 §七「不承诺」，不写成承诺。
 
-## 屏幕上的数字是谁算出来的
+---
 
-这是双人 impartial 博弈，**没有"最短解步数"可量**。这里的难度是**博弈论价值**：
+## 一、承诺表：每一条都是一条真会红的命令
 
-| 印在屏幕上的 | 来自 |
-| --- | --- |
-| `必胜/必败` | `js/core/solve.js` 在该关可达集（序理想）上的穷举 + 记忆化 minimax；对手用的是同一张表 |
-| `首口 k 个` | 同一张表里"咬完之后判定为必败"的合法口数 |
-| `随机一口赢率 = k / 合法口` | 上面那个数直接除出来的实测值 |
-| `局面数 209` 之类 | 该关可达集的大小（表里有多少个局面） |
-| `棋书覆盖 419 / 36` | `tools/bake.mjs` 对整个宇宙（≤4 行、≤10 列、≤18 格）穷举完的 P/N 计数 |
+| 承诺 | 哪条命令判它 | 判的是什么 | 本轮交回 |
+| --- | --- | --- | --- |
+| 每一关印着的 `winner / k / winningMoves / legal / chance / states` 都能从序列化形状独立复算，手改一位就红 | `node test/library.test.mjs` | `verifyPool()` 必须返回空列表；9 个**篡改探针**（改 winner、k+1、清空胜口、cells+3、legal+2、chance=0.99、states 越界、假档位、五行形状）逐个必须被 `verifyLot` 点名（`js/core/library.js:53-81`） | `rows: 17 fail: 0` |
+| 判定表与公开刻画逐位对齐：两行必败局恰好是阶梯 `(k,k-1)`、单行 1..9 只有裸毒格必败、方阵与全部非退化矩形先手必胜 | `node test/anchor.test.mjs` | 期望值是**手写在 `test/fixture.mjs:114,117` 的字面量**，不是从实现读回来的；含反方向逐条（45 个两行局减 8 条阶梯 = 37 个必胜）与 12 条手算 fixture（`test/anchor.test.mjs:52,156-165`） | `rows: 43 fail: 0` |
+| 对手只查表：越出棋书的局面**抛异常**，不 fallback 到求解器 | `node test/book.test.mjs` | `lookup/classify/winningBitesOf` 三个入口对 `[11,1]` 全部必须抛（`js/core/book.js:58-65,89-100`）；棋书重烘之后与发货文件**逐字节相同**（`test/book.test.mjs:54-61`） | `rows: 13 fail: 0` |
+| 规则机：非法一口一律不计数，交出 `[1]` 的那一瞬间就判负；**点错一口就交给已证明必胜的对手** | `node test/game.test.mjs` | 对 32 关**全部 296 个错误首口**（每关每个非胜口，不抽样）逐条把整局走到底，结局必须 `status='lost'` 且 `loser='you'`（`test/game.test.mjs:155-181`） | `rows: 23 fail: 0` |
+| 位置模型的物理不变式：非增行长向量（序理想），悬空的格子不存在 | `node test/model.test.mjs` | `validateShape` 的四组负例（空向量 / 非增 / 0 与负长度 / 非整数与非数组，`test/model.test.mjs:23-44`）+ `applyBite` 对宇宙逐口仍产出合法形状（下限断言 `n > 500` 条边，实测到的边数只在失败时打印）+ 闭包数 == 序理想计数 == 矩形闭式 `C(r+w,r)-1`（`test/model.test.mjs:158-188`） | `rows: 25 fail: 0` |
+| 求解器自洽，且**三条独立路线**给出同一张判定表 | `node test/solve.test.mjs` | 每关独立表 vs 全宇宙自底向上 vs `test/naive.mjs` 那份独立重写的枚举，419 个局面逐点一致（`test/solve.test.mjs:110-138`）；反证：去掉毒格规则后整张表翻成全 N | `rows: 16 fail: 0` |
+| 每日一题与分享链接在任何设备上落同一根巧克力 | `node test/rng.test.mjs` | `hashSeed` 是纯函数、是 FNV-1a **派生**的两轮 UTF-16 混合（对 6 个 ASCII 种子逐个证明与教科书 FNV-1a 不同，`test/rng.test.mjs:57-66`）；日期→种子→池内下标链路跨进程一致 | `rows: 13 fail: 0` |
+| 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
+| 26 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **26 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮**被它自己的预检拒了**，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:142` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `:145-148` 的 console 断言） | 本轮**零条浏览器读数**：`rc=8`，五套场景一条都没执行 |
 
-一条命令复现这张表（重写 `js/data/lots.js`，并在写盘前用两条独立路线互相对账）：
+一条命令跑全部 node 侧：
 
-```sh
-node tools/bake.mjs
+```
+npm test          # = npm run check && npm run unit
 ```
 
-一条命令复算所有印着的数字（8 个套件、165 行断言）：
+本轮原样结论行（八套各打一行，`tools/harness.mjs:41`）：
 
-```sh
-node --test test/
+```
+rows: 43 fail: 0     # anchor
+rows: 13 fail: 0     # book
+rows: 23 fail: 0     # game
+rows: 17 fail: 0     # library
+rows: 25 fail: 0     # model
+rows: 13 fail: 0     # rng
+rows: 16 fail: 0     # solve
+rows: 15 fail: 0     # storage
 ```
 
-外部锚点，期望值手写死在 `test/fixture.mjs` 与 `test/anchor.test.mjs` 里，不是从实现读回来的：
+**165 是把上面八行加起来的和**：仓里没有任何一条**命令**印这个总数（`deliverable.md:16,102,152`
+也写着 165，但那是上一轮有人手加之后抄进记录行的，不是判据），也没有「少跑一套就红」的地板
+（这条不是省略，是缺口，写在 §七第 2 条）。
+值得一提：这八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
+是由 `node --test test/` 那份带文件名的输出确认的（`✔ test/anchor.test.mjs` 紧跟它的 `rows: 43`，
+往下 book 13 / game 23 / library 17 / model 25 / rng 13 / solve 16 / storage 15）。
+`node --test test/` 这条写法（`README` 旧版与
+`js/main.js:112` 都提到）本轮也复跑过，结论行是 `ℹ tests 8 / ℹ pass 8 / ℹ fail 0`
+—— 注意那个 `tests 8` 数的是**文件数**，不是断言数，八行 `rows:` 与上表逐字相同。
 
-- **两行情形**的必败局恰好是阶梯 `[k, k-1]`，`k = 2..9`：`[[2,1],[3,2],[4,3],[5,4],[6,5],[7,6],[8,7],[9,8]]`，除此之外该区间内没有别的必败局（`test/anchor.test.mjs` 逐条 + 反方向逐条）。
-- **单行**宽度 1..9 的判定向量 `[false, true×8]`：只有裸毒格是必败。
-- **策略窃取**：n×n 方阵（n=2..5）与全部 ≥2 格的矩形都是先手必胜。
-- 矩形的可达集数量对上闭式 `C(r+w, r) - 1`；任意形状的可达集数量对上序理想计数 —— 第三条路是 `test/naive.mjs` 那份**独立重写**的枚举。
+---
 
-## 怎么跑
+## 二、怎么跑：`package.json` 的 scripts 逐条
 
-ES module 需要 origin，`file://` 会被 CORS 挡，所以起个零依赖静态服务器：
+`dependencies` 与 `devDependencies` 都是 `{}`（`package.json:30-31`），零运行时依赖，不需要 `npm install`；
+本轮实测仓内也确实没有 `node_modules/`。
 
-```sh
-npm start                 # http://127.0.0.1:5201/
-npm run check             # 全量 node --check
-npm run unit              # 8 个 node 套件
-bash tools/verify.sh      # node 套件 + 真实 headless Chrome（CDP 9361 / web 5201）
+| 命令 | 实际跑的是什么 | 本轮状态 |
+| --- | --- | --- |
+| `npm test` | `npm run check && npm run unit`（`package.json:14`） | **跑过，rc=0**，输出见 §一 |
+| `npm run check` | 上面那条 26 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），八个文件按字母序，任一非零立即中止 | **跑过**，八行 `rows: N fail: 0` |
+| `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:59`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
+| `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
+| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 八套 + 真 Chrome 五场景 | **本轮禁跑**，见 §七 |
+| `npm run bake` | `node tools/bake.mjs`（`package.json:11`）：全宇宙判定 + 逐关独立建表 + 两路对账，然后**覆写 `js/data/lots.js`**（`tools/bake.mjs:219-221`） | **本轮未跑**：它会改写发货文件，改 `js/data/lots.js` 不在文档轮的可动范围内。它的结构量由只读路线复现（§五） |
+| `npm run electron` | `electron .`（`package.json:10`），入口 `electron/main.cjs`，它用 `startServer({port: 0})` 自己挑一个临时口（`electron/main.cjs:7-8`） | **跑不了**：`electron` 不在两个依赖表里，仓内也没有 `node_modules/`。本轮未尝试执行 |
+
+单独跑其中一套是可以的，文件名就是命令：`node test/anchor.test.mjs`、`node test/book.test.mjs` ……
+每个套件自己 `process.exit(fail 数 > 0 ? 1 : 0)`（`tools/harness.mjs:42`）。
+
+---
+
+## 三、规则与判定：逐条能从源码指出来
+
+真值审计器是 `js/core/solve.js` 建出来的那张 P/N 表，玩家的每一次判定走
+`js/core/game.js:classifyNow`（`js/core/game.js:59-69`）→ `js/core/book.js:lookup`，
+UI 里没有任何第二套「合法」的定义。
+
+| # | 规则 | 源码对应处 | 违反时系统说的话（本轮由测试逐字断言） |
+| --- | --- | --- | --- |
+| 1 | 局面是一张**非增**的行长向量 `[s0>=s1>=…>=1]`，`(0,0)` 是毒格 | `js/core/shapes.js:5-13`（口径写在文件头）、校验器 `validateShape:50-63` | `第 1 行长度 3 大于上一行 2：序理想不允许悬空的格子`、`shape 为空（毒格也已被咬掉，不是可行动的局面）`（`js/core/shapes.js:52,59`） |
+| 2 | 一口咬掉 `(r,c)` 连同**所有 `r'>=r` 且 `c'>=c`** 的格子；上面的行原样，下面的行被裁到 `c` 列，裁成 0 的行整行消失 | `js/core/shapes.js:applyBite:143-153`，几何侧 `js/view.js:goneSquares:310-317` | `applyBite([4,4],[0,2]) = [2,2]`、`applyBite([5,4,3],[2,0]) = [5,4]` 都是断言在 `test/model.test.mjs:140-147` |
+| 3 | **毒格不能主动咬**：`(0,0)` 永远不在合法口里；但 `(r>=1, 0)` 是合法的（它只削掉下面几行的第一列） | `js/core/shapes.js:105-115`（列起点那一行是 112，上面 110-111 的注释就在说这件事）、`isLegalBite:117-125` | `毒格不能主动咬` / 只剩毒格时 `只剩毒格：咬下去即输`（同一行的三元式，`js/core/shapes.js:131-132`），`biteReason` 六句拒绝各钉一条（`test/model.test.mjs:124-132` 逐句 `eq`） |
+| 4 | **被迫咬到毒格的人输**：交出 `[1]` 的那一瞬间比赛就结束了 —— 造出 `[1]` 的人赢，接手的人输 | `js/core/game.js:101`（`isTerminal(next) → finish`）、终局约定写在 `js/core/game.js:6-11` | 结束后任何一口 `rejected='本局已结束'`，状态一格不动（`test/game.test.mjs:193-201`）；被 `@pointer` 用真鼠标复验（`tools/playtest.mjs:327-330`） |
+| 5 | 只剩毒格时**主动**点毒格是认输，不是空转：这一步 `rejected=null`，直接判负 | `js/core/game.js:80-88` 的 `forced` 分支 | `test/game.test.mjs:203-212` |
+
+除上面这几条之外没有别的约束：**没有平局** —— 状态机只有 `playing | won | lost` 三态
+（`js/core/game.js:36`），「平局规则」在 `DESIGN.md:125` 的「已知不做」里被点名，
+没有全局连通性、没有对称性、没有白格规则。玩家的三个动作是咬、撤销、提示：撤销退的是**一整轮**
+（你那一口 + 它引出来的回答），不是半步（`js/core/game.js:161-184`）；提示在必胜局报出胜口坐标，
+在必败局直说没救（`js/core/game.js:145-155`），而「必败局不许谎报有胜口」是对棋书里全部 36 个
+必败局面**逐条**数的（`test/game.test.mjs:232-246`，断言 `checked === BOOK.p`）。
+
+非法输入一律**不计费**：`playBite` 在拒绝时返回同一个状态、只换 `line`（`js/core/game.js:88`），
+所以「点了没反应」和「点了被拒绝」在屏幕上是可区分的，而且 `plies` 不会漂。
+本轮实测两类非法探针（毒格、行越界、列越界、非整数坐标、`null`）都满足「形状与步数一字不变」
+（`test/game.test.mjs:56-66`）。
+
+---
+
+## 四、门禁清单：`tools/` 里到底有什么
+
+`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 八套 node 测试在 `test/`（条数见 §一）：
+
+| 文件 | 判什么 | 本轮条数 / 状态 |
+| --- | --- | --- |
+| `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
+| `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
+| `tools/playtest.mjs`（551 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
+| `tools/verify.sh`（175 行） | 生命周期与预检，**一条判据都不加**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性 | 本轮试跑：预检以 `rc=8` 拒绝，Chrome 与静态服务都没起（见 §七第 1 条） |
+
+五套浏览器场景的**条数**：`tools/verify.sh` 只打印 `rows: len(rows)` 并判 `fail`，**没有任何一处写着期望条数**。
+所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 15、`@play` 20、`@save` 12、`@routes` 14 个调用点
+（其中一套在 `for (const tier of …)` 四档循环里 ⇒ 正常路径 17 行）、`@pointer` 25 个调用点
+（两条是循环内「走不通才报」的失败行、两对是 `if/else` 二选一 ⇒ 正常路径 21 行），
+合计**正常路径 85 行**。这个 85 与 `deliverable.md:17,112-116` 记录的 2026-09-27 那一次
+`@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21` 逐场景对得上 ——
+但请注意那是**别人那一次的读数 + 本轮的静态点数**，两者都不是本轮实测。
+
+`test/` 八套的条数是本轮实测交回的（§一那张表），逐套内容：
+`anchor 43`（外部锚点）、`book 13`（棋书完整性 + 范围守卫 + 完美性普查 419 全覆盖）、
+`game 23`（状态机、296 个错误首口全量）、`library 17`（发货文件逐关重解 + daily/random 纯度）、
+`model 25`（形状代数与负例）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
+
+---
+
+## 五、难度与量纲：本仓没有 `balance`，量的是博弈论价值
+
+先说清一件事：**这里没有「最短解步数」可量**。这是双人 impartial 博弈，"多少步"取决于对手怎么走。
+所以屏幕上那四个数各自对应一个可复算的量，一个字符串标签（`difficulty: 'hard'` 之类）都没有：
+
+| 印在屏幕上的 | 来自 | 判它的命令 |
+| --- | --- | --- |
+| `当前判定 必胜/必败` | 棋书对该形状的 `n` 位（`js/core/book.js:76-79`），随 `turn` 换算成「对你是胜还是败」（`js/core/game.js:59-69`） | `node test/book.test.mjs` 的完美性普查：419 个局面逐条要求「N 的建议通向 P，P 的每一口都只能交出 N」 |
+| `首口 k 个` | 同一张表里「咬完之后判为 P」的合法口数（`js/core/book.js:104-118`） | `node test/book.test.mjs` 把 `k` 与 `winningMoves` 对独立求解逐关比 |
+| `随机一口赢率 = k / legal` | 上面那个数直接除（`js/core/book.js:114`），发货存 6 位小数、复核时两边落到同一个 6 位网格（`js/core/library.js:75,100-102`） | `node test/library.test.mjs` 的 `chance` 篡改负例 |
+| `局面数（本关表）` | 该关可达集大小 = 非空子序理想数（`js/core/solve.js:261-275`） | `node test/solve.test.mjs` 要求「闭包 BFS」「序理想计数」「矩形闭式 `C(r+w,r)-1`」三个数对同一形状相等 |
+
+**宇宙**是 4 行 / 10 列 / 18 格以内的一切合法巧克力条（`js/core/shapes.js:20-22`），
+本轮只读复测：`solveUniverse()` 交出 **419 个局面、36 个 P、383 个 N**，
+`universeShapes()` 同样数出 419，`js/data/lots.js` 里发货的 `BOOK` 也是 `states 419 / p 36 / n 383 / rows 419`
+（本轮只读脚本直接对 `solveUniverse()`、`universeShapes()`、发货 `BOOK` 三处取数，
+与 `test/book.test.mjs`、`test/solve.test.mjs:124` 的断言值一致）。
+宇宙里两行局面共 **53** 个，其中 **8** 个是必败局 —— 恰好是 `(2,1)…(9,8)` 那八条阶梯。
+「全宇宙穷举很快」这句话在本仓不是读数，是判据：`test/solve.test.mjs:177-189` 对 32 关逐关重建表，
+断言 `worstStates <= 419` **且** 最贵一次建表 `<= 50 ms`，本轮这条是绿的。
+具体多少毫秒本文不写 —— 它随同机负载漂，写死就成了一条别人复跑必红的承诺。
+所以「玩家点击时不搜索」不是性能妥协，是没有必要。
+
+**档位的 census 是精确分数，不是抽样**：`js/core/make.js:candidates()` 把一个档位里的**所有**形状枚举一遍，
+`eligibility()` 逐个判（`js/core/make.js:71-82`）。下表是本轮**重跑的只读 census**
+（临时脚本导入 `candidates/buildTable/eligibility`，不写盘），
+结构量与 `DESIGN.md:73-78`、`deliverable.md:52-55` 记录的 2026-09-27 那一次**逐格相同**
+（候选数、通过门槛数、两类拒绝计数都对得上；最右两列口径不同，见下表下的说明）：
+
+| 档位 | 上限（行/列/面积，最少格） | 候选 census | 通过门槛 | 拒绝原因 | 合格集的 k / states 区间 | 本档发货 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `shoal` 浅咬 | 2 / 4 / 8，≥3 格 | 14 | 8（57.1%） | p-position 4、too-small 2 | k 1–1 / states 3–14 | 8 |
+| `linked` 连排 | 2 / 8 / 16，≥4 格 | 44 | 33（75.0%） | p-position 8、too-small 3 | k 1–1 / states 4–44 | 8 |
+| `twined` 三缕 | 3 / 6 / 12，≥5 格 | 67 | 47（70.1%） | p-position 12、too-small 8 | k 1–3 / states 5–47 | 8 |
+| `master` 满盘 | 4 / 8 / 18，≥8 格 | 325 | 264（81.2%） | p-position 32、too-small 29 | k 1–3 / states 8–209 | 8 |
+
+两个百分比别混用：**75.0% 那类是 `合格 / census`**（生成器口径），
+**18.2% 那类是 `发货 / census`**（`PER_BAND=8` 的策展上限压出来的，不是求解器拒绝，
+`js/data/lots.js` 的 `TIERS_META.acceptPct` 印的是后者：57.1 / 18.2 / 11.9 / 2.5）。
+拒绝原因只有 `p-position`（必败局不出题）与 `too-small` 两类出现，
+`no-winning-move` 与 `too-many-states` 本轮 census 里计数为 0（一个 N 局面按定义至少有一口，
+而单关可达集是 419 的子集，`js/core/make.js:86` 的 `MAX_STATES` 就钉在这个数上）。
+
+**发货表上量的东西**（本轮按 `js/data/lots.js` 逐行加总，非引用旧文档）：32 关、
+合计 **340 个合法首口、44 个胜口、296 个错误首口**、总格数 372，`states` 跨 3–209，
+`chance` 跨 **0.058824–0.6**（即面板上的 5.9%–60.0%）。三个数都独立对过：
+`legal` 之和与 `legalBites()` 现算的 340 相同。
+`test/game.test.mjs:155-180` 那个循环遍历每一关 `legalBites()` 里所有非胜口 —— 也就是上面这 296 个 ——
+**每个都走完整局**（对手按表走、玩家按 `hintAt` 走），每步都要求玩家已判必败、结局 `status === 'lost'`；
+它自己钉的下限只有 `wrongFirsts >= 40`（`test/game.test.mjs:180`），296 是循环实际跑到的数。
+
+难度读数（本轮，全部从发货文件 `js/data/lots.js` 逐行排序数出，无抽样）：
+**最薄的是 `master-01` `[8,5,3,2]`、`master-02` `[8,6,3,1]`、`master-03` `[8,5,4,1]` 三关并列** ——
+17 个合法首口里只有 1 口赢，`chance` 都是 0.058824；
+第四薄才是两行档的 `linked-01` `[8,8]`（15 口里 1 口，0.066667，覆盖 44 个局面）。
+最厚的是 `twined-08` `[3,2,1]`（5 口里 3 口，0.6）。
+可达集最大的一关同样是 `master-01`：**209** 局面 / **2044** 条边（本轮 census 逐关重跑 `buildTable()` 复现，`states` 与 `bites` 两个字段；`test/solve.test.mjs:185-188` 那条 `worstStates` 就是它）。
+两行档的 `k` **恒为 1**（`test/book.test.mjs:164-180` 对 53 个两行局面逐条数过，
+本轮按同一组合式子独立数出的也是 53），所以「阶梯 (k,k-1) 就在旁边」是这仓最硬的形状，
+不是形容词。
+
+**唯一一处不在博弈论口径上的屏幕数字**：结算卡片上的星星。
+`par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`（`js/main.js:148`）是一个纯几何式，
+不是表里的量，也没有任何一条断言读它的值（`@pointer` 只把 `stars.textContent` 当 detail 打印，
+`tools/playtest.mjs:233`）。见 §七。
+
+---
+
+## 六、目录结构（真实列出来的）
+
+```
+index.html                 单 <canvas> 页面 + 面板；favicon 是内联 SVG data-URI（零外部请求）
+css/game.css               样式（109 行 / 4,582 B）
+js/main.js                 装配层：DOM、路由、存档、`window.chomp` 那张闸用的脸
+js/view.js                 canvas 程序绘制 + 手势几何（cellPoint / pointAt / clampToBar / goneSquares）
+js/core/shapes.js          位置模型：序理想向量、validateShape、legalBites、applyBite、可达集闭包
+js/core/solve.js           穷举 + 记忆化 minimax、全宇宙自底向上表、三条闭式
+js/core/book.js            棋书编解码；lookup 越界**抛异常**；report/winningBitesOf 纯查表
+js/core/game.js            对局状态机：轮次、非法一口不计数、交出 [1] 即判负、撤销、认证线路
+js/core/make.js            四个档位、候选 census、出题门槛与拒绝原因
+js/core/library.js         池 API：verifyLot/verifyPool、derive、#/daily、#/random
+js/core/rng.js             hashSeed（FNV-1a 派生的两轮 UTF-16 混合）+ mulberry32
+js/core/storage.js         一个 localStorage 键；唯一被允许提 window 的 core 模块，requireBackend 会抛
+js/data/lots.js            生成物：BOOK（419 行）+ 32 关 + TIERS_META + DAILY_IDS（本轮实测 15,266 B，
+                           BAKED_AT 2026-09-27T10:19:32.740Z，SCHEMA chomp-lots-v1）
+server.cjs                 零依赖静态服务（5201，root 形态）；CommonJS，Electron 的 main 也 require 它
+electron/main.cjs          桌面壳（34 行，port 0 自挑）；`electron` 未列为依赖，故本机跑不起来
+tools/harness.mjs          微型框架（node 与浏览器同形输出）
+tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
+tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景
+tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
+test/*.test.mjs            八套 node 套件（anchor book game library model rng solve storage）
+test/fixture.mjs           手算期望值（12 条 fixture + 两行阶梯 + 单行向量），被 anchor/solve 引用
+test/naive.mjs             第三份独立实现的枚举与无记忆化暴力递归，测试专用
+.github/workflows/ci.yml   unit + browser 两个 job（browser 跑 SKIP_UNIT=1 / WD_TIMEOUT=240）
+.github/workflows/pages.yml 只 `cp index.html css js` → _site
+DESIGN.md / deliverable.md README.md LICENSE .gitignore
 ```
 
-路由：`#/c/<n>` 战役、`#/lot/<id>` 分享某一关、`#/daily` 每日一题（`hashSeed('chomp-daily:YYYY-MM-DD')` 选题，任何设备同一天同一根巧克力）、`#/random/<tier>/<seed>` 稳定随机题。
+没有 `tests/` 这个目录（是 `test/`），没有构建产物目录、没有资源目录：画面全部 canvas 2D 程序绘制，
+`@boot` 里有一条断言在读 `performance.getEntriesByType('resource')`，要求没有任何
+`.png/.jpe?g/.gif/.woff2?/.mp3/.svg` 结尾的请求 —— 但 `data:` URI 是放行支，
+紧接着另一条要求 favicon 必须是内联 `data:image/svg+xml`（`tools/playtest.mjs:370-371`，本轮未跑）。
 
-## 已知边界
+---
 
-- **上限 4 行 / 10 列 / 18 格**。这是烘焙宇宙的全部范围；越出范围的查表**抛异常**而不是现场搜索（`test/book.test.mjs` 有这条）。形状再大，序理想数就组合爆炸了。
-- 没有平局规则（本博弈无平局），没有 4 行以上大面积，没有启发式 AI：对手只会查表。
-- 面板会实时印出当前局面对你是必胜还是必败 —— 这是规格要求的口径，等于每口都给你判卷。真正的隐藏信息是"哪几口是胜口"，只有按提示或展开证明抽屉才会说出来。
-- 必败的形状一律不出题（玩家赢不了的题不是谜题），所以 32 关全是先手必胜；`k` 全都在关卡里印着，两行档的 `k` 恒为 1（实测，见 DESIGN）。
-- 存档只有本机 localStorage：通关次数、最少口数、每日一题打卡。没有成就、排行、签到、云存档。分享只分享题目本身。
+## 七、这个仓**不承诺**什么
+
+1. **不承诺浏览器闸本轮被复验。** 本轮**试过** `bash tools/verify.sh`，它以自己的预检拒绝开工：
+   `rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=9373` 的 headless Chrome
+   （`--user-data-dir=/tmp/sky-chrome-profile`，**不是本仓的**），并且**一个子进程都没派生** ——
+   跑完之后 `:5201` 与 `:9361` 上仍然没人听。这一条就是 §八 那句「占号就当红，不借用」的实现证据。
+   台架纪律写在 `DESIGN.md` 第十节，预检本身在 `tools/verify.sh:27-44`（`exit 6/7/8` 三种抢口各一种）。
+   所以 §一最后一行与 §四那五套条数**没有本轮实测**：它们分别是「源码里 `rec()` 调用点的静态计数」
+   （本轮重数过一遍：boot 15 / play 20 / routes 14 / save 12 / pointer 25 个调用点，
+   按 `tools/playtest.mjs:336` 起的场景分段数的）与
+   `deliverable.md:112-116` 记录的 2026-09-27 读数。两者互相吻合，但吻合不等于本轮跑绿过。
+2. **不承诺「断言条数不会缩水」。** `tools/verify.sh:139` 那行只把 `rows` 的数量**打印**出来，
+   判红只看 `fail` 数组；`tools/harness.mjs:42` 的退出码也只认 `bad.length`。
+   所以「某套场景少写了一半断言」不会变红，「少跑一套」也不会 —— `npm run unit` 与
+   `.github/workflows/ci.yml:31` 都是对 `test/*.test.mjs` 的 glob 循环，文件消失了循环就少转一圈，照样 rc=0。
+   这一族别的仓用「RESULT 行 + 每套该交回几条 + 少一条腿就红」把这件事钉住（`yajilin` 的
+   `tools/check.mjs` 逐条读套件自报的 `RESULT … checks= fails=` 并数行数，`norinori` 的
+   `tools/verify.sh:186` 那条 `want_checks` 按腿钉死条数），**本仓没有这一层**，
+   本文也不假装它有。
+3. **不承诺难度梯子在档位之间单调。** 没有任何一条断言说「master 比 twined 难」。
+   本轮从发货表数的 `chance` 区间是 `shoal 14.3–50% / linked 6.7–10% / twined 9.1–60% / master 5.9–17.6%`
+   —— 按「随机一口就赢」这个本仓自己的口径，`twined-08` `[3,2,1]`（60%）比**整个 linked 档**都容易，
+   而各档发货的 `states` 也不成序（3–14 / 29–44 / 13–47 / 182–209：`twined` 的 13 就在 `linked` 的 29 之下）——
+   它量的是这张表要证多大一片，不是难度。
+   档位是按行数与面积分的，不是按可证的难度序分的。
+4. **不承诺结算星级的口径。** 星星来自 `Math.ceil(Math.log2(cells))` 这个几何式（`js/main.js:148`），
+   不在棋书里，也不在任何断言里；它是屏幕上唯一一个复算不出「博弈论价值」的数字。
+   上一版 README 没提这一点，现在明确：它就是个装饰性评分，别引用成难度。
+5. **不承诺规则出处。** 玩法四条是仓内自述，没有任何出版物或网页被钉住；
+   唯一的外部结论是两行阶梯刻画（`test/fixture.mjs:112` 的 "Tweed 1908"），
+   连它都没有给出可核对的文献条目 —— 但它是**当期望值用的**，不是当装饰用的：
+   本轮 43 条锚点断言全部通过，其中反方向要求「45 个两行局里除 8 条阶梯外全部必胜」（37 条）。
+6. **不承诺 4 行 / 10 列 / 18 格以外还能玩。** 越界的查表**抛异常**（`js/core/book.js:58-65`，
+   `test/book.test.mjs:64-93`、`@play` 里 `c.classify('12.12')` 也必须抛）。
+   上限不是随手写的：可达集是序理想，矩形就到 `C(r+w,r)-1`（`js/core/solve.js:255-257`），
+   再大就是组合爆炸，而且本仓没有新的可证的量可印（`DESIGN.md:124-125`）。
+7. **不承诺必败题、换位、让子、自适应。** 出货门槛硬性要求 `winner==='先手'`
+   （`js/core/library.js:56` 与 `js/core/make.js:77`），所以 32 关全是先手必胜；
+   表里那 36 个必败局面只被用来当判定的分母（`test/game.test.mjs:232-246`），没做成模式。
+   没有平局规则（本博弈无平局）、没有启发式 AI（对手只查表）。
+8. **不承诺存档跨设备。** 只有一个 localStorage 键 `chomp.save.v1`（`js/core/storage.js:15`）：
+   通关次数、`best` 只降不升、`unlocked` 只升不降、每日一题打卡。
+   没有成就、排行、签到、云存档、内购；分享只带题目路由。
+   被拒绝的存储（隐私窗、配额）会被 `persistent()` 明确报成 `false` 而不是「空档」
+   （`js/core/storage.js:187-196`），但这一条只有 node 侧的假后端测过（`test/storage.test.mjs`），
+   **真浏览器里的隐私窗本轮未测**。
+9. **不承诺 `npm run bake` 的可复现性被本轮重验。** 它是唯一能证明「发货文件是被算出来的」的命令，
+   但它覆写 `js/data/lots.js`，而那个文件不在文档轮的可动范围里。可用的替代证据是它的**只读等价物**：
+   `node test/book.test.mjs` 会重新 `solveUniverse()`、重新 `encodeBook`，并要求与发货的那份
+   `JSON.stringify` 逐字节相同（`test/book.test.mjs:54-61`）—— 本轮这条是绿的，
+   所以「发货棋书 == 现算棋书」这件事成立；至于**再跑一次 bake 是否还会写出同一个文件**，
+   本轮没有证据（`BAKED_AT` 那一行本来就会随时间变，`tools/bake.mjs:197`）。
+10. **不承诺 `npm run electron` 能跑。** `electron` 既不在 `dependencies` 也不在 `devDependencies`
+    （两处都是 `{}`），仓内也没有 `node_modules/`，`build` 那段配置也没有任何 CI 读它。
+    本轮没有尝试执行它。桌面壳是代码存在，不是被验证过的交付物。
+11. **不承诺线上站点可读。** `pages.yml` 只拷 `index.html css js`（`.github/workflows/pages.yml:29-31`），
+    本仓 README 与 DESIGN 里也没有写出发布 URL 的那一行；`deliverable.md:149-161` 记录了
+    主代理 2026-09-27 抓到的 `/` 200 / 4,091 B 等读数（与本仓 `index.html` 的实测字节一致），
+    但那是**别人的那一次**，本轮没有做网络复核，本文也没有把任何 URL 写成仓内事实。
+12. **不承诺界面对手感与美术。** 浏览器闸只认三类证据：DOM 矩形/文本、画布像素采样、真指针事件读数。
+    `.hidden`、类名、注释里的意图一概不算证据（`tools/playtest.mjs:343-352` 用像素采样判断「巧克力真的画出来了」，
+    用 `getBoundingClientRect` 判断控件存在，别的一律不读）。
+13. **发货的棋书就是答案表，这是故意的。** `pages.yml` 会连 `js/data/lots.js` 一起发出去，
+    因为页面要靠它实时印「当前判定」。任何人 `F12` 读 419 行里的 `1/0` 就能知道每一口之后是胜是败。
+    本仓不承诺「答案不可查」；它承诺的是「答案不是猜的」。
+
+---
+
+## 八、端口与 URL 形态
+
+三个号写死在源码里：**web 5201**（`server.cjs:48,59`、`tools/verify.sh:22`、`package.json:9`）、
+**CDP 9361**（`tools/verify.sh:21`、`tools/playtest.mjs:18`）、以及 `verify.sh` 自己那一串退出码
+（`2` 找不到 Chrome / `3` devtools 没绑上 / `4` 静态服务没答 / `5` `window.chomp` 始终没出现 /
+`6` `9361` 已被别的孤儿 Chrome 占 / `7` `5201` 已被占 / `8` 机器上还有别的带 remote-debugging-port 的
+headless Chrome）。占号就当红，不借用：借来的端口会发出另一个应用的 `index.html`，
+而「页面加载成功了」分不清这件事。兄弟仓的号（gridlock 5180/9340、nine-rings 5181/9341、
+tango 5191/9351）写在 `tools/verify.sh:6-7` 与 `DESIGN.md:130-131`，本仓刻意错开。
+`SHOTS_DIR` 默认落在 `/tmp/chomp-shots`（`tools/verify.sh:24`），看门狗预算 `WD_TIMEOUT` 默认 420 s，
+CI 的 browser job 压到 240 s（`tools/verify.sh:74`、`.github/workflows/ci.yml:45`）。
+
+URL 形态：**浏览器闸默认只跑一种** —— root 形态 `http://127.0.0.1:5201/`，仓库自己就是文档根
+（`tools/verify.sh:23` 的 `BASE=${BASE_URL:-http://127.0.0.1:$WEB_PORT/}`）。
+`BASE_URL` 可以整体替换（对着线上那一跑读同一个闸），但要注意两件事：脚本在 `BASE_URL` 被覆盖时
+**仍然会另起本地 `server.cjs`**（`tools/verify.sh:60` 无条件执行），而就绪轮询与页面都打在 `$BASE` 上；
+`tools/playtest.mjs:21-22` 的 `isOurs` 只按 `new URL(BASE).origin` 匹配页签。
+**本仓没有第二形态**：没有 Pages 前缀那个端口，也没有 `SHAPES=root|prefix|mobile` 那种多腿循环
+（那是同族另两个仓的东西，本仓 `tools/verify.sh` 里 grep 不到 `SHAPES`，也 grep 不到任何
+「每场景该交回几条断言」的 need 列表）。路由是 hash 段的四种，与 `js/main.js:35-54` 逐条对应：
+`#/c/<n>`（战役第 n 关，越界钳到 1..32）、`#/lot/<id>`（认不到的 id 回落战役首关而不是白屏）、
+`#/daily`（`mulberry32(hashSeed('chomp-daily:' + YYYY-MM-DD)).int(DAILY_IDS.length)` 选题，
+`js/core/library.js:106-127`，任何设备同一天同一根巧克力）、`#/random/<tier>/<seed>`
+（种子串 `chomp-random:<tier>:<seed>`；裸 `#/random` 会把生成的 token 写回地址栏以便分享，
+`js/main.js:50`）。`file://` 打不开：ES module 需要 origin，`server.cjs` 与 `electron/main.cjs`
+存在的理由都在这句话上。
 
 MIT。
