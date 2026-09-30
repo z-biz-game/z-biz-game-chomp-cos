@@ -2,8 +2,14 @@
 // never classifies a position (js/core/book.js does) — the three layers stay apart so a
 // `node --test` run can import the rules without a DOM.
 //
-// Everything drawn here is procedural: cocoa gradients, bevels, scored grooves and a path-drawn
-// skull for the poisoned square. No image, no font file, no audio asset.
+// The material is drawn, not loaded from somebody else's pack: assets/gen/make_art.py generates
+// the cocoa grain, the foil tray, the skull and the crumb sprites from the same palette this
+// file's gradients use, and they are committed as real PNGs. Every one of them has a procedural
+// fallback, so a missing or blocked image degrades the picture, never the game.
+//
+// Motion lives in js/core/anim.js (a fixed-step accumulator). This file only integrates and
+// paints: `draw()` reads the animation state, it never advances it, so a repaint at any rate
+// cannot change where a crumb ends up.
 //
 // Coordinate contract with the harness: `cellPoint(r, c)` and `previewPoint()` return CLIENT
 // coordinates (canvas rect included), which is exactly what CDP's `Input.dispatchMouseEvent`
@@ -12,11 +18,39 @@
 // correctly refused — which is why the @pointer suite exists.
 
 import { area, applyBite, encodeShape, legalBites } from './core/shapes.js';
+import { advance, createAnim, snapshot } from './core/anim.js';
 
 const GAP = 3;            // px between squares, the scored groove of the bar
 const PAD = 14;           // px of wrapper around the bar
 const MIN_CELL = 26;
 const MAX_CELL = 62;
+
+// The committed bitmaps (assets/gen/make_art.py). Loading is opportunistic: `ready` flips when
+// the image decodes, and every painter below keeps its procedural path as the fallback, so the
+// board looks right whether or not the fetch ever lands (file://, offline, a blocked CDN).
+const SPRITE_SRC = {
+  cocoa: 'assets/textures/cocoa-256.png',
+  foil: 'assets/textures/foil-256.png',
+  skull: 'assets/textures/skull-160.png',
+  crumb: 'assets/textures/crumb-48.png',
+};
+
+function loadSprites() {
+  const sprites = {};
+  for (const [name, src] of Object.entries(SPRITE_SRC)) {
+    const slot = { img: null, ready: false, failed: false, src };
+    sprites[name] = slot;
+    if (typeof Image === 'undefined' || typeof document === 'undefined') {
+      slot.failed = true; // node: no decoder exists, so the procedural path is the real one
+      continue;
+    }
+    const img = new Image();
+    img.onload = () => { slot.img = img; slot.ready = true; };
+    img.onerror = () => { slot.failed = true; };
+    img.src = src;
+  }
+  return sprites;
+}
 
 export function createView(canvas, getState) {
   const ctx = canvas.getContext('2d');
@@ -26,6 +60,63 @@ export function createView(canvas, getState) {
   let cell = MIN_CELL;
   let originX = PAD;
   let originY = PAD;
+  const sprites = loadSprites();
+  let anim = createAnim({});
+  let running = false;
+  let paused = false;
+  let rafId = 0;
+  let lastTime = 0;      // 0 is the "first frame after start" sentinel, never a real timestamp
+  let dirty = true;      // a state change forces one paint even while paused
+  let cocoaPattern = null;
+  let foilPattern = null;
+
+  // A frame callback that only ever *accumulates* time. The simulation itself is stepped inside
+  // `advance()` at a fixed 1/120 s, so the number of steps a frame runs is a function of elapsed
+  // time alone — never of which display the player is on.
+  function frame(now) {
+    if (!running) return;
+    rafId = requestAnimationFrame(frame);
+    // The sandbox clock starts at 1000 ms, not 0: a zero here would be the sentinel and eat a
+    // whole frame, inventing a 25 ms rate dependence out of nothing.
+    const t = now > 0 ? now : 1;
+    if (lastTime === 0) {
+      lastTime = t;
+      return;
+    }
+    let dt = (t - lastTime) / 1000;
+    lastTime = t;
+    if (dt < 0) dt = 0;
+    if (dt > 0.25) dt = 0.25; // a backgrounded tab returns with seconds of debt; drop it
+    if (paused) return;       // paused: the accumulator does not even see the elapsed time
+    const steps = advance(anim, dt);
+    if (steps > 0 || dirty || anim.particles.length || anim.shake > 0) {
+      dirty = false;
+      draw();
+    }
+  }
+
+  function start() {
+    if (running || typeof requestAnimationFrame !== 'function') return false;
+    running = true;
+    lastTime = 0;
+    rafId = requestAnimationFrame(frame);
+    return true;
+  }
+
+  function stop() {
+    running = false;
+    if (rafId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+
+  // Pause is a simulation gate, not a visual overlay: with it on, no fixed step runs, so crumbs
+  // freeze mid-air and the poison pulse stops breathing. Resuming continues from the same clock.
+  function setPaused(on) {
+    paused = !!on;
+    dirty = true;
+    if (!paused) lastTime = 0; // do not bank the time spent paused into one giant frame
+    return paused;
+  }
 
   function grid() {
     const st = getState();
@@ -152,6 +243,18 @@ export function createView(canvas, getState) {
     ctx.lineTo(x + w - 2, y + h - 2);
     ctx.lineTo(x + 3, y + h - 2);
     ctx.stroke();
+    if (cocoaPattern) {
+      // The generated cocoa grain, clipped to the square and blended so the gradient underneath
+      // still decides the tone. This is the difference between a brown rectangle and a truffle.
+      ctx.save();
+      roundRect(x, y, w, h, Math.max(3, w * 0.14));
+      ctx.clip();
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = 0.34;
+      ctx.fillStyle = cocoaPattern;
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
   }
 
   function skull(x, y, s) {
@@ -199,17 +302,44 @@ export function createView(canvas, getState) {
     ctx.restore();
   }
 
+  function ensurePatterns() {
+    if (!cocoaPattern && sprites.cocoa.img) {
+      cocoaPattern = ctx.createPattern(sprites.cocoa.img, 'repeat');
+    }
+    if (!foilPattern && sprites.foil.img) {
+      foilPattern = ctx.createPattern(sprites.foil.img, 'repeat');
+    }
+    return { cocoa: cocoaPattern, foil: foilPattern };
+  }
+
   function draw() {
     const st = getState();
     const { shape, rows, cols } = grid();
+    const pat = ensurePatterns();
     ctx.clearRect(0, 0, cssW, cssH);
+    ctx.save();
+    // The shake is a pure function of the simulation state: same clock, same offset, whatever
+    // the refresh rate. No randomness is consulted while painting.
+    if (anim.shake > 0) {
+      ctx.translate(
+        Math.sin(anim.clock * 47.3) * anim.shake,
+        Math.cos(anim.clock * 39.1) * anim.shake * 0.7,
+      );
+    }
 
     // the wrapper / foil tray
     const w = cols * cell + (cols - 1) * GAP;
     const h = rows * cell + (rows - 1) * GAP;
     roundRect(originX - 7, originY - 7, w + 14, h + 14, 12);
-    ctx.fillStyle = '#3a2415';
+    ctx.fillStyle = pat.foil || '#3a2415';
     ctx.fill();
+    if (pat.foil) {
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = '#3a2415';
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.strokeStyle = 'rgba(210,170,120,0.35)';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -247,10 +377,17 @@ export function createView(canvas, getState) {
         chocolate(q.x, q.y, q.w, q.h, poison);
         if (poison) {
           ctx.save();
+          // The poison breathes: a slow scale driven by the simulation clock, not by frames.
+          const breathe = anim.reducedMotion ? 0 : Math.sin(anim.pulse * Math.PI * 2) * 0.05;
           ctx.fillStyle = 'rgba(180,255,140,0.16)';
           roundRect(q.x, q.y, q.w, q.h, Math.max(3, q.w * 0.14));
           ctx.fill();
-          skull(q.x, q.y, q.w);
+          if (sprites.skull.ready) {
+            const s = q.w * 0.72 * (1 + breathe);
+            ctx.drawImage(sprites.skull.img, q.x + (q.w - s) / 2, q.y + (q.h - s) / 2, s, s);
+          } else {
+            skull(q.x, q.y - q.w * breathe * 0.5, q.w * (1 + breathe));
+          }
           ctx.restore();
         }
       }
@@ -295,6 +432,35 @@ export function createView(canvas, getState) {
     ctx.textAlign = 'left';
     ctx.fillText(`${area(shape)} 格`, originX, originY + h + 16);
     ctx.restore();
+
+    drawCrumbs();
+    ctx.restore(); // the shake translate
+  }
+
+  // The crumbs a bite threw up. Their positions come out of the fixed-step integrator in
+  // js/core/anim.js; this function reads them and draws, and adds nothing to the state.
+  function drawCrumbs() {
+    const list = anim.particles;
+    if (!list.length) return;
+    const sprite = sprites.crumb.ready ? sprites.crumb.img : null;
+    ctx.save();
+    for (const p of list) {
+      const a = Math.max(0, Math.min(1, p.life / 0.5));
+      ctx.save();
+      ctx.globalAlpha = a * (0.55 + 0.45 * p.tone);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      const s = p.size * (1 + p.tone * 0.5);
+      if (sprite) {
+        ctx.drawImage(sprite, -s / 2, -s / 2, s, s);
+      } else {
+        ctx.fillStyle = p.tone > 0.5 ? '#8a5733' : '#54301a';
+        roundRect(-s / 2, -s / 2, s, s, s * 0.3);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   // Where the preview anchor sits in client space (the harness asks for it instead of guessing
@@ -328,5 +494,25 @@ export function createView(canvas, getState) {
     goneSquares,
     legalTargets: () => legalBites(getState().shape).map(([r, c]) => ({ r, c })),
     metrics: () => ({ cell, originX, originY, gap: GAP, pad: PAD, dpr, cssW, cssH, key: encodeShape(getState().shape) }),
+    // ---- animation surface -------------------------------------------------
+    get anim() { return anim; },
+    // The shell hands the view the SAME object it holds, so a harness driving `advance()`
+    // directly and the rAF loop can never be looking at two different worlds.
+    setAnim(a) { if (a) anim = a; return anim; },
+    animState: () => snapshot(anim),
+    spriteReport: () => Object.fromEntries(Object.entries(sprites).map(([k, v]) => [k, v.ready ? 'ready' : v.failed ? 'fallback' : 'pending'])),
+    start,
+    stop,
+    setPaused,
+    isPaused: () => paused,
+    isRunning: () => running,
+    setReducedMotion(on) {
+      anim.reducedMotion = !!on;
+      if (anim.reducedMotion) { anim.particles.length = 0; anim.shake = 0; }
+      dirty = true;
+      draw();
+      return anim.reducedMotion;
+    },
+    invalidate() { dirty = true; },
   };
 }

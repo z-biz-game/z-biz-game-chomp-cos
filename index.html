@@ -4,19 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#241710">
+<meta name="color-scheme" content="dark">
 <meta name="description" content="毒格巧克力 CHOMP：网格巧克力，左上角有毒。每次咬掉一格连同它右下方的全部，被迫咬到毒格的人输。每一关的必胜/必败与必胜口数都是穷举 minimax 量出来的，屏幕上同时印着局面数。">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%235a351c'/%3E%3Crect x='3' y='3' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='17' y='3' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='3' y='17' width='12' height='12' rx='3' fill='%238a5733'/%3E%3Crect x='17' y='17' width='12' height='12' rx='3' fill='%23c9f2a0'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="毒格巧克力 · CHOMP">
+<meta property="og:description" content="每次咬掉一格连同它右下方的全部，被迫咬到毒格的人输。必胜/必败与必胜口数由穷举 minimax 量出。">
+<meta property="og:image" content="assets/og/chomp-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="assets/og/chomp-og.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="毒格巧克力">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="assets/icons/icon-48.png">
+<link rel="icon" type="image/png" sizes="96x96" href="assets/icons/icon-96.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>毒格巧克力 · CHOMP</title>
 <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
 <header class="topbar">
-  <h1 class="brand"><span class="brand-mark">▦</span>毒格巧克力<small>CHOMP</small></h1>
+  <h1 class="brand"><img class="brand-mark" src="assets/icons/icon-48.png" alt="" width="22" height="22">毒格巧克力<small>CHOMP</small></h1>
   <nav class="modes" id="modes" aria-label="模式">
     <button type="button" data-mode="campaign">战役</button>
     <button type="button" data-mode="daily">每日</button>
     <button type="button" data-mode="random">随机</button>
   </nav>
+  <div class="hud" role="group" aria-label="系统控制">
+    <button type="button" id="help" title="玩法说明 · H">?</button>
+    <button type="button" id="pause" aria-pressed="false" title="暂停 / 继续 · P">暂停</button>
+    <button type="button" id="mute" aria-pressed="false" title="静音 / 恢复 · M">音效 开</button>
+    <button type="button" id="fullscreen" aria-pressed="false" title="全屏 · F">全屏</button>
+  </div>
   <p class="totals" id="totals"></p>
 </header>
 
@@ -35,6 +57,16 @@
         </div>
       </div>
     </div>
+    <div class="curtain paused-curtain" id="pausecard" hidden>
+      <div class="curtain-card">
+        <h2>已暂停</h2>
+        <p class="tally">仿真停在第 <b id="pausesim">0</b> 步：碎屑悬在半空，恢复后接着落。</p>
+        <div class="curtain-actions">
+          <button type="button" id="resume" class="primary">继续（P）</button>
+          <button type="button" id="pauserestart">重开这一关</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <aside class="panel">
@@ -46,7 +78,7 @@
       <button type="button" id="restart">重开</button>
       <button type="button" id="share">分享这一局</button>
     </div>
-    <p class="legend">在棋盘上按下并拖动：高亮的右下方就是这一口会咬掉的区域，松口即咬。<b>左上角带骷髅的是毒格</b>，不能主动咬。</p>
+    <p class="legend">在棋盘上按下并拖动：高亮的右下方就是这一口会咬掉的区域，松口即咬。<b>左上角带骷髅的是毒格</b>，不能主动咬。键盘：<kbd>方向键</kbd> 移准星 · <kbd>Enter</kbd> 咬 · <kbd>P</kbd> 暂停 · <kbd>R</kbd> 重开 · <kbd>M</kbd> 静音 · <kbd>F</kbd> 全屏 · <kbd>H</kbd> 玩法。</p>
     <details class="drawer" id="drawer">
       <summary>这一局的证明 <span id="proofcount"></span></summary>
       <ol class="proof" id="proof"></ol>
@@ -66,6 +98,24 @@
     </details>
   </aside>
 </main>
+
+<div class="modal" id="tutorial" hidden role="dialog" aria-modal="true" aria-labelledby="tut-title">
+  <div class="modal-card">
+    <h2 id="tut-title">玩法说明 · 三句话</h2>
+    <ol class="tut-steps">
+      <li>
+        <p><b>一条巧克力刻成方格，左上角那格有毒。</b>苍白的骷髅标着它 —— 那是永远留到最后的“一口”。</p>
+        <img src="assets/icons/icon-96.png" alt="3×3 巧克力条：左上角毒格带骷髅，右下已被咬掉两格" width="76" height="76">
+      </li>
+      <li><p><b>轮到你，就按住一格拖动再松口。</b>被高亮的整个右下方象限一起进嘴：咬 (r, c) 带走第 r 行第 c 列往右、以及它下面每一行第 c 列往右的全部格子。</p></li>
+      <li><p><b>被迫咬下毒格的人输。</b>所以目标是把「只剩毒格」交到对手手上。右侧 <code>当前判定</code> 与 <code>开局证明</code> 是穷举 minimax 的读数，不是猜的。</p></li>
+    </ol>
+    <p class="tut-keys">键盘可全打：<kbd>方向键</kbd> 移准星 · <kbd>Enter</kbd>/<kbd>Space</kbd> 咬下 · <kbd>P</kbd> 暂停 · <kbd>R</kbd> 重开 · <kbd>M</kbd> 静音 · <kbd>F</kbd> 全屏 · <kbd>?</kbd> 再看这一页。</p>
+    <div class="curtain-actions">
+      <button type="button" id="tut-close" class="primary">开始咬（Enter）</button>
+    </div>
+  </div>
+</div>
 
 <p class="toast" id="toast" hidden></p>
 <script type="module" src="js/main.js"></script>

@@ -11,15 +11,22 @@ import { buildTable, solvePosition, solveUniverse } from './core/solve.js';
 import { countOutcomes, encodeBook } from './core/book.js';
 import { persistent, store } from './core/storage.js';
 import { todayKey } from './core/rng.js';
+import { advance as advanceAnim, createAnim, emitBite, rejectKick, resetTransient, setReducedMotion, snapshot } from './core/anim.js';
+import { audioState, isMuted, resumeContext, setMuted as setAudioMuted, sfx, suspendContext, unlockAudio } from './core/audio.js';
+import { installWhenReady } from './pwa.js';
 import { createView } from './view.js';
 
-const VERSION = 1;
+const VERSION = 2;
 const el = {};
-for (const id of ['board', 'hintline', 'curtain', 'stars', 'verdict', 'tally', 'again', 'next', 'crumbs', 'readout', 'hint', 'undo', 'restart', 'share', 'modes', 'totals', 'proof', 'proofcount', 'proofmore', 'wipe', 'toast']) {
+for (const id of ['board', 'hintline', 'curtain', 'stars', 'verdict', 'tally', 'again', 'next', 'crumbs', 'readout', 'hint', 'undo', 'restart', 'share', 'modes', 'totals', 'proof', 'proofcount', 'proofmore', 'wipe', 'toast', 'help', 'pause', 'mute', 'fullscreen', 'tutorial', 'tut-close', 'pausecard', 'pausesim', 'resume', 'pauserestart']) {
   el[id] = document.getElementById(id);
 }
 
 const map = bookMap();
+
+// One animation world, shared by the view's rAF loop and every harness: `view.setAnim(anim)`
+// below hands the same object over, so nobody is ever integrating a private copy.
+const anim = createAnim({ seed: 20260930, reducedMotion: false });
 
 const game = {
   lot: null,
@@ -29,7 +36,11 @@ const game = {
   hints: 0,
   mode: 'campaign',
   index: 1,
+  paused: false,
+  cursor: null,   // keyboard anchor: {r, c}, moved by the arrows and committed by Enter
 };
+
+let pwaStatus = { registered: false, reason: '注册尚未返回' };
 
 // ------------------------------------------------------------------ routing
 function routeTo(hash) {
@@ -71,6 +82,8 @@ function load(hash, { push = true } = {}) {
   game.preview = null;
   game.hints = 0;
   game.settled = false;
+  game.cursor = null;
+  resetTransient(anim); // a new lot must not inherit the old one's crumbs or its half-frame debt
   // ONE exhaustive solve per lot, at load, for the proof drawer. A click re-reads `game.proof`;
   // it never re-solves (the contract's ban on search behind a tap is about this line).
   game.proof = solvePosition(lot.shape);
@@ -159,6 +172,7 @@ function paintCard() {
 // One gesture -> one bite. `playBite` refuses illegal anchors and returns the SAME state with a
 // spoken reason, so a rejected click never bills a ply.
 function commit(anchor) {
+  if (game.paused) return { rejected: '已暂停', plies: game.match.plies, paused: true };
   const before = game.match;
   const res = playBite(map, before, [anchor.r, anchor.c], 'you');
   game.preview = null;
@@ -166,12 +180,19 @@ function commit(anchor) {
   if (res.rejected) {
     el.hintline.textContent = res.state.line;
     flash(res.rejected);
+    rejectKick(anim);
+    sfx('refuse');
+    view.invalidate();
     view.draw();
     totals();
     return { rejected: res.rejected, plies: res.state.plies };
   }
   const gone = view.goneSquares(before.shape, anchor.r, anchor.c);
   game.match = { ...game.match, lastBite: { seat: 'you', move: [anchor.r, anchor.c], gone } };
+  // The crumbs come out of the same footprint the rules just billed, so the particle count is
+  // evidence about the move rather than decoration laid on top of it.
+  emitBite(anim, gone, view.squareRect, { strength: 1 });
+  sfx('bite');
   afterMove();
   return { rejected: null, plies: game.match.plies };
 }
@@ -207,6 +228,7 @@ function settle() {
     if (i >= 0) store.unlock(i + 2);
   }
   if (lot.mode === 'daily') store.markDaily(lot.day, lot.id, { won });
+  sfx(won ? 'win' : 'lose');
 }
 
 let toastTimer = 0;
@@ -218,7 +240,9 @@ function flash(text) {
 }
 
 function onPointerDown(ev) {
+  if (game.paused) return; // a paused board takes no bites at all — see setPaused()
   if (game.match.status !== 'playing') return;
+  unlockAudio(); // the gesture is the only chance to open the context; it is silent until a voice needs it
   const hit = view.pointAt(ev.clientX, ev.clientY);
   if (!hit) return; // dead canvas space: not a control at all, so nothing is even attempted
   const shape = game.match.shape;
@@ -271,6 +295,127 @@ el.board.addEventListener('pointerup', onPointerUp);
 el.board.addEventListener('pointercancel', () => { game.dragging = false; game.preview = null; view.draw(); });
 window.addEventListener('resize', () => view.resize());
 
+view.setAnim(anim);
+view.start();
+
+// ------------------------------------------------------------------ system controls
+// Pause is a gate on the simulation, not a dimming layer: with it on, `advance()` is never
+// called, so the crumb field freezes mid-air and the poison stops breathing. The step count the
+// card prints is the proof — it is the same number before and after the pause.
+function setPaused(on) {
+  game.paused = !!on;
+  view.setPaused(game.paused);
+  el.pause.setAttribute('aria-pressed', String(game.paused));
+  el.pause.textContent = game.paused ? '继续' : '暂停';
+  el.pausecard.hidden = !game.paused;
+  if (game.paused) {
+    el.pausesim.textContent = String(anim.simSteps);
+    // Audio in a paused game is a bug, not an ambience: the context itself is parked.
+    if (!isMuted()) suspendContext();
+  } else if (!isMuted()) {
+    resumeContext();
+  }
+  render();
+  return game.paused;
+}
+
+el.pause.addEventListener('click', () => { unlockAudio(); setPaused(!game.paused); sfx('ui'); });
+el.resume.addEventListener('click', () => setPaused(false));
+el.pauserestart.addEventListener('click', () => { setPaused(false); el.restart.click(); });
+
+// Mute goes through js/core/audio.js, which suspends the AudioContext and refuses to build a
+// single oscillator while it is on. The label and `aria-pressed` both move, so the state is
+// readable without opening the console.
+function applyMute(on, { persist = true } = {}) {
+  setAudioMuted(on);
+  if (persist) store.setMuted(on);
+  el.mute.setAttribute('aria-pressed', String(!!on));
+  el.mute.textContent = on ? '音效 关' : '音效 开';
+  return on;
+}
+
+function toggleMute() {
+  unlockAudio();
+  const next = !isMuted();
+  applyMute(next);
+  if (!next) sfx('ui'); // unmuting answers with one click so the player knows it came back
+  return next;
+}
+
+el.mute.addEventListener('click', toggleMute);
+
+// Fullscreen on the document element — the id it is bound to (#fullscreen) exists in index.html,
+// which is the failure mode this line is written against.
+function toggleFullscreen() {
+  const root = document.documentElement;
+  const active = !!document.fullscreenElement;
+  if (!active && typeof root.requestFullscreen === 'function') {
+    root.requestFullscreen({ navigationUI: 'hide' }).then(
+      () => setFullscreenPressed(true),
+      () => flash('这个浏览器不允许全屏'),
+    );
+    return true;
+  }
+  if (active && typeof document.exitFullscreen === 'function') {
+    document.exitFullscreen().then(() => setFullscreenPressed(false), () => {});
+  }
+  return false;
+}
+
+function setFullscreenPressed(on) {
+  el.fullscreen.setAttribute('aria-pressed', String(!!on));
+  el.fullscreen.textContent = on ? '退出全屏' : '全屏';
+}
+
+el.fullscreen.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => setFullscreenPressed(!!document.fullscreenElement));
+
+// The tutorial: openable at any time with H or ?, and shown once per device because the save
+// file remembers. A player who has already bitten something never gets it pushed at them again.
+function openTutorial(on) {
+  el.tutorial.hidden = !on;
+  if (on) {
+    el['tut-close'].focus();
+    setPaused(true); // the board waits while the rules are on screen
+  } else {
+    store.markTutorialSeen();
+    if (game.paused) setPaused(false);
+  }
+  return on;
+}
+
+el.help.addEventListener('click', () => openTutorial(el.tutorial.hidden));
+el['tut-close'].addEventListener('click', () => openTutorial(false));
+el.tutorial.addEventListener('click', (ev) => { if (ev.target === el.tutorial) openTutorial(false); });
+
+// ------------------------------------------------------------------ reduced motion
+// Two inputs, one answer: the OS preference is the default and the save file can override it
+// (some players want the crumbs, some players get motion sick on a train). The branch is not
+// cosmetic — it stops particles from ever being spawned and freezes the pulse, see anim.js.
+const motionQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
+
+function motionWanted() {
+  const override = store.settings.motionOverride;
+  if (override === 'reduce') return true;
+  if (override === 'full') return false;
+  return !!(motionQuery && motionQuery.matches);
+}
+
+function syncMotion() {
+  const on = motionWanted();
+  setReducedMotion(anim, on);
+  view.setReducedMotion(on);
+  return on;
+}
+
+if (motionQuery) {
+  const onChange = () => { syncMotion(); render(); };
+  if (typeof motionQuery.addEventListener === 'function') motionQuery.addEventListener('change', onChange);
+  else if (typeof motionQuery.addListener === 'function') motionQuery.addListener(onChange);
+}
+
 el.hint.addEventListener('click', () => {
   const st = game.match;
   if (st.status !== 'playing') return;
@@ -297,10 +442,13 @@ el.undo.addEventListener('click', () => {
 });
 
 el.restart.addEventListener('click', () => {
+  const cleared = resetTransient(anim);
   game.match = startMatch(game.lot);
   game.preview = null;
+  game.cursor = null;
   game.hints = 0;
   game.settled = false;
+  flash(`重开：清掉 ${cleared.particles} 粒碎屑、抖动 ${cleared.shake.toFixed(1)}px、累加器 ${(cleared.accumulator * 1000).toFixed(1)}ms`);
   render();
 });
 
@@ -338,6 +486,90 @@ for (const b of el.modes.querySelectorAll('button')) {
 }
 window.addEventListener('hashchange', () => load(location.hash, { push: false }));
 
+// ------------------------------------------------------------------ keyboard
+// The cursor is a real anchor, not a decoration: it is clamped to squares the rules still allow
+// and it feeds the same `commit()` a finger does, so every legality and every refusal reason a
+// pointer gets, the keyboard gets. The preview highlight is reused to show it.
+function ensureCursor() {
+  const shape = game.match.shape;
+  const legal = (r, c) => r >= 0 && c >= 0 && r < shape.length && c < shape[r] && !(r === 0 && c === 0);
+  if (game.cursor && legal(game.cursor.r, game.cursor.c)) {
+    game.preview = { ...game.cursor };
+    return game.cursor;
+  }
+  for (const [r, c] of legalBites(shape)) {
+    game.cursor = { r, c };
+    game.preview = { r, c };
+    view.invalidate();
+    view.draw();
+    return game.cursor;
+  }
+  game.cursor = null;
+  return null; // no legal bite left: the board is finished, and Enter will be refused out loud
+}
+
+function stepCursor(dr, dc) {
+  const shape = game.match.shape;
+  const cur = game.cursor || { r: 0, c: 1 };
+  let r = cur.r, c = cur.c;
+  for (let i = 0; i < 64; i++) {
+    r += dr; c += dc;
+    if (r < 0 || c < 0 || r >= shape.length || c >= shape[r]) { r -= dr; c -= dc; break; }
+  }
+  if (r === 0 && c === 0) c = shape[0] > 1 ? 1 : 0; // the cursor never parks on the poison
+  if (r >= shape.length || c >= (shape[r] || 0)) { r = 0; c = (shape[0] || 1) > 1 ? 1 : 0; }
+  game.cursor = { r, c };
+  game.preview = { r, c };
+  view.invalidate();
+  view.draw();
+  return game.cursor;
+}
+
+function onKeyDown(ev) {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const k = ev.key;
+  const onButton = ev.target && ev.target.tagName === 'BUTTON';
+  // A focused button already answers Space/Enter with its own click; firing the board action too
+  // would bite twice from one press.
+  if (onButton && (k === ' ' || k === 'Spacebar' || k === 'Enter')) return;
+  switch (k) {
+    case 'ArrowUp': stepCursor(-1, 0); ev.preventDefault(); break;
+    case 'ArrowDown': stepCursor(1, 0); ev.preventDefault(); break;
+    case 'ArrowLeft': stepCursor(0, -1); ev.preventDefault(); break;
+    case 'ArrowRight': stepCursor(0, 1); ev.preventDefault(); break;
+    case 'Enter':
+    case ' ':
+    case 'Spacebar': {
+      if (!el.tutorial.hidden) { openTutorial(false); break; }
+      const anchor = ensureCursor();
+      commit(anchor ? { ...anchor } : { r: 0, c: 0 });
+      ev.preventDefault();
+      break;
+    }
+    case 'p': case 'P': setPaused(!game.paused); break;
+    case 'r': case 'R': el.restart.click(); break;
+    case 'm': case 'M': toggleMute(); break;
+    case 'f': case 'F': toggleFullscreen(); break;
+    case 'h': case 'H': case '?': openTutorial(el.tutorial.hidden); break;
+    case 'u': case 'U': el.undo.click(); break;
+    case 'Escape':
+      if (!el.tutorial.hidden) openTutorial(false);
+      else if (game.paused) setPaused(false);
+      break;
+    default: break;
+  }
+}
+
+window.addEventListener('keydown', onKeyDown);
+
+// ------------------------------------------------------------------ boot
+// Three states come back from the save file before the first paint: the mute switch, the motion
+// preference, and whether this device has ever been shown the rules.
+applyMute(store.settings.muted, { persist: false });
+syncMotion();
+if (!store.settings.seenTutorial) openTutorial(true);
+installWhenReady().then((r) => { pwaStatus = r; });
+
 // ------------------------------------------------------------------ test hook
 window.chomp = {
   version: VERSION,
@@ -373,8 +605,24 @@ window.chomp = {
       n: cls.n,
       persist: persistent(),
       lastBite: st.lastBite || null,
+      paused: game.paused,
+      cursor: game.cursor ? { ...game.cursor } : null,
+      muted: isMuted(),
+      reducedMotion: !!anim.reducedMotion,
+      anim: snapshot(anim),
+      audio: audioState(),
+      sprites: view.spriteReport(),
+      pwa: pwaStatus,
     };
   },
+  setPaused,
+  toggleMute,
+  openTutorial,
+  syncMotion,
+  anim,
+  // Drive the simulation by hand: the frame-rate harness feeds 30/60/120 Hz through exactly this
+  // line, so what it measures is the same code path the rAF loop runs.
+  advance: (elapsed) => ({ steps: advanceAnim(anim, elapsed), state: snapshot(anim) }),
   pool: poolStats(),
   tiers: Object.keys(poolStats().byTier).map((key) => ({ key, lots: poolStats().byTier[key] })),
   book: { states: BOOK.states, p: BOOK.p, n: BOOK.n, bound: BOOK.bound },
