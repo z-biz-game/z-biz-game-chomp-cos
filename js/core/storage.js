@@ -37,13 +37,53 @@ function count(v) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
+function flag(v) {
+  return !!v;
+}
+
 function blank() {
   return {
     records: {},
     daily: {},
     unlocked: 1,
     stats: { plays: 0, wins: 0, losses: 0, plies: 0, hints: 0 },
+    settings: { muted: false, seenTutorial: false, motionOverride: null },
   };
+}
+
+// One record at a time, never the whole file: a settings blob that arrived as `null` (an older
+// writer, a hand-edited key, a truncated quota write) must cost the player that one field, not
+// their whole save. Object.assign(defaults, parsed) is the shape that throws on exactly `null`
+// and takes the whole game down with it, so nothing here merges blindly.
+function decodeSettings(raw) {
+  const base = blank().settings;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
+  const override = raw.motionOverride;
+  return {
+    muted: flag(raw.muted),
+    seenTutorial: flag(raw.seenTutorial),
+    motionOverride: override === 'reduce' || override === 'full' ? override : null,
+  };
+}
+
+function decodeRecords(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [id, rec] of Object.entries(raw)) {
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue; // one corrupt record is dropped, the rest survive
+    out[id] = rec;
+  }
+  return out;
+}
+
+function decodeDaily(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [day, rec] of Object.entries(raw)) {
+    if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue;
+    out[day] = rec;
+  }
+  return out;
 }
 
 let cache = null;
@@ -51,7 +91,7 @@ let cache = null;
 function load() {
   if (cache) return cache;
   const ls = backend();
-  const raw = ls ? ls.getItem(KEY) : null;
+  const raw = ls ? window.localStorage.getItem(KEY) : null;
   if (raw) {
     try {
       const p = JSON.parse(raw);
@@ -59,8 +99,8 @@ function load() {
         const base = blank();
         const s = (p.stats && typeof p.stats === 'object') ? p.stats : {};
         cache = {
-          records: p.records && typeof p.records === 'object' ? p.records : base.records,
-          daily: p.daily && typeof p.daily === 'object' ? p.daily : base.daily,
+          records: decodeRecords(p.records),
+          daily: decodeDaily(p.daily),
           unlocked: count(p.unlocked) || base.unlocked,
           stats: {
             plays: count(s.plays),
@@ -69,6 +109,7 @@ function load() {
             plies: count(s.plies),
             hints: count(s.hints),
           },
+          settings: decodeSettings(p.settings),
         };
         return cache;
       }
@@ -81,10 +122,9 @@ function load() {
 }
 
 function persist() {
-  const ls = backend();
-  if (!ls) return false;
+  if (!backend()) return false;
   try {
-    ls.setItem(KEY, JSON.stringify(cache));
+    window.localStorage.setItem(KEY, JSON.stringify(cache));
     return true;
   } catch (err) {
     return false; // quota or a blocked store: the session simply stays in memory
@@ -96,6 +136,27 @@ export const store = {
   get stats() { return load().stats; },
   get daily() { return load().daily; },
   get unlocked() { return load().unlocked; },
+  get settings() { return load().settings; },
+
+  setMuted(on) {
+    load().settings.muted = !!on;
+    persist();
+    return load().settings.muted;
+  },
+
+  markTutorialSeen() {
+    load().settings.seenTutorial = true;
+    persist();
+    return true;
+  },
+
+  // 'reduce' | 'full' | null — null means "follow the OS", which is the default nobody should
+  // have to opt into twice on every device they own.
+  setMotionOverride(which) {
+    load().settings.motionOverride = which === 'reduce' || which === 'full' ? which : null;
+    persist();
+    return load().settings.motionOverride;
+  },
 
   record(id) {
     return load().records[id] || null;

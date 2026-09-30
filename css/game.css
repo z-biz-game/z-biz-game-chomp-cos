@@ -107,3 +107,77 @@ button.primary { background: var(--primary); border-color: #a06a3a; }
   padding: 8px 16px; border-radius: 999px; font-size: 14px; z-index: 20;
 }
 .toast[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- system layer
+   Everything below is about being usable on a phone in your hand rather than on a 1040px
+   window: the insets the notch and the home bar take, the finger-sized targets, and the two
+   switches (pause, reduced motion) that decide whether the board is allowed to move at all. */
+
+/* env() is only non-zero when the viewport asked for `viewport-fit=cover`, which index.html does.
+   Without these the topbar sits under the notch and the toast under the home indicator. */
+.topbar {
+  padding: calc(14px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
+           calc(10px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+}
+.stage {
+  padding: calc(18px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
+           calc(28px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+}
+.toast { bottom: calc(26px + env(safe-area-inset-bottom)); max-width: calc(100vw - 2 * env(safe-area-inset-left)); }
+.modal-card { max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px); overflow: auto; }
+
+/* 44x44 is the touch floor, not a suggestion — the panel buttons read as text but a thumb has
+   to land on them from a moving car. */
+button {
+  min-height: 44px; min-width: 44px;
+  padding: 8px 14px;
+  font-variant-numeric: tabular-nums;
+}
+.modes button { min-height: 44px; }
+
+.hud { display: flex; gap: 6px; margin-left: auto; }
+.hud button { font-size: 13px; letter-spacing: 0.5px; }
+.hud button[aria-pressed="true"] { border-color: var(--poison); color: var(--poison); background: #2c1d12; }
+.totals { margin: 0; font-size: 13px; }
+
+kbd {
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #2b1c12; border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 4px; padding: 1px 5px; color: var(--ink);
+}
+.legend kbd { color: var(--poison); }
+
+.paused-curtain .curtain-card h2 { color: var(--poison); }
+
+.modal {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: center;
+  padding: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+           calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  background: rgba(12, 7, 4, 0.82);
+}
+.modal[hidden] { display: none; }
+.modal-card {
+  width: min(620px, 100%); background: var(--bg2); border: 1px solid var(--line);
+  border-radius: 14px; padding: 20px 22px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+.modal-card h2 { margin: 0 0 10px; font-size: 20px; color: var(--poison); }
+.tut-steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; font-size: 14.5px; }
+.tut-steps p { margin: 0; color: var(--ink); }
+.tut-steps img { display: block; margin: 8px 0 0; border-radius: 10px; }
+.tut-steps code { color: var(--poison); }
+.tut-keys { margin: 14px 0 12px; font-size: 13px; color: var(--ink-dim); }
+.modal-card .curtain-actions { justify-content: flex-start; }
+
+/* A real branch, not a comment: with the OS asking for less motion the board stops animating
+   (js/core/anim.js drops the particles and freezes the pulse) and nothing here may keep moving
+   underneath it, so transitions and keyframes are cut rather than shortened. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .toast { transform: none; }
+  button:hover:not(:disabled) { transform: none; }
+}
