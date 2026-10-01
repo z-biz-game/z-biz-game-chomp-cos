@@ -367,8 +367,18 @@ const SCENARIOS = {
     rec('the verdict printed for the opening position is 必胜 (every lot is an N-position)', s.verdict === '必胜' && s.n === true && s.winner === '先手', s);
     rec('the proof drawer quotes this lot\\'s own reachable set', document.getElementById('proof').textContent.includes(String(s.states)) && /穷举|minimax/.test(document.getElementById('proof').textContent), document.getElementById('proof').textContent.slice(0, 160));
     rec('this origin can persist', s.persist === true, { persist: s.persist });
-    rec('no image / font / audio request was made', performance.getEntriesByType('resource').every((e) => !/\\.(png|jpe?g|gif|woff2?|mp3|svg)/.test(e.name) || /data:/.test(e.name)), performance.getEntriesByType('resource').map((e) => e.name.split('/').pop()).slice(0, 12));
-    rec('the favicon is an inline data URI (no /favicon.ico 404)', document.querySelector('link[rel=icon]').href.startsWith('data:image/svg+xml'), document.querySelector('link[rel=icon]').href.slice(0, 40));
+    const bitmaps = performance.getEntriesByType('resource').filter((e) => /[.](png|jpe?g|gif|webp)([?]|$)/.test(e.name));
+    rec('every bitmap the page asked for is a self-generated PNG shipped in this repo', bitmaps.length >= 4
+      && bitmaps.every((e) => e.name.startsWith(location.origin + '/') && e.name.includes('/assets/') && e.name.endsWith('.png')),
+      bitmaps.map((e) => e.name.split('/').pop()).slice(0, 12));
+    rec('no webfont / audio / svg-as-raster request', performance.getEntriesByType('resource').every((e) => !/[.](woff2?|ttf|otf|mp3|ogg|m4a|svg)([?]|$)/.test(e.name)),
+      performance.getEntriesByType('resource').map((e) => e.name.split('/').pop()).slice(0, 12));
+    const icons = [...document.querySelectorAll('link[rel=icon], link[rel=apple-touch-icon]')].map((l) => l.getAttribute('href'));
+    rec('the icons are real PNG files on disk, one of them at least 180px', icons.length >= 3
+      && icons.every((h) => h && h.indexOf('assets/icons/') === 0 && h.endsWith('.png')) && icons.some((h) => h.indexOf('apple-touch-icon') >= 0), icons);
+    await new Promise((r) => setTimeout(r, 200));
+    rec('the four canvas textures decoded into real bitmaps (no procedural fallback in the browser)',
+      (() => { const v = Object.values(c.state.sprites); return v.length === 4 && v.every((x) => x === 'ready'); })(), c.state.sprites);
     return { rows };
   })()`,
 

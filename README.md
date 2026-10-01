@@ -35,7 +35,9 @@
 | 求解器自洽，且**三条独立路线**给出同一张判定表 | `node test/solve.test.mjs` | 每关独立表 vs 全宇宙自底向上 vs `test/naive.mjs` 那份独立重写的枚举，419 个局面逐点一致（`test/solve.test.mjs:110-138`）；反证：去掉毒格规则后整张表翻成全 N | `rows: 16 fail: 0` |
 | 每日一题与分享链接在任何设备上落同一根巧克力 | `node test/rng.test.mjs` | `hashSeed` 是纯函数、是 FNV-1a **派生**的两轮 UTF-16 混合（对 6 个 ASCII 种子逐个证明与教科书 FNV-1a 不同，`test/rng.test.mjs:57-66`）；日期→种子→池内下标链路跨进程一致 | `rows: 13 fail: 0` |
 | 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
-| 26 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **26 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
+| 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a` | 应存在 18 张 / 缺失 0 / 0 字节 0 / 最小边 ≥180 有 9 张 |
+| 30 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **30 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮**被它自己的预检拒了**，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:142` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `:145-148` 的 console 断言） | 本轮**零条浏览器读数**：`rc=8`，五套场景一条都没执行 |
 
 一条命令跑全部 node 侧：
@@ -44,10 +46,11 @@
 npm test          # = npm run check && npm run unit
 ```
 
-本轮原样结论行（八套各打一行，`tools/harness.mjs:41`）：
+本轮原样结论行（九套各打一行，`tools/harness.mjs:41`）：
 
 ```
 rows: 43 fail: 0     # anchor
+rows: 6 fail: 0      # anim
 rows: 13 fail: 0     # book
 rows: 23 fail: 0     # game
 rows: 17 fail: 0     # library
@@ -57,15 +60,15 @@ rows: 16 fail: 0     # solve
 rows: 15 fail: 0     # storage
 ```
 
-**165 是把上面八行加起来的和**：仓里没有任何一条**命令**印这个总数（`deliverable.md:16,102,152`
-也写着 165，但那是上一轮有人手加之后抄进记录行的，不是判据），也没有「少跑一套就红」的地板
-（这条不是省略，是缺口，写在 §七第 2 条）。
-值得一提：这八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
+**171 是把上面九行加起来的和**（本轮之前是八行 165，`deliverable.md:16,102,152` 记的就是那个
+165 —— 那是上一轮有人手加之后抄进记录行的，不是判据），仓里没有任何一条**命令**印这个总数，
+也没有「少跑一套就红」的地板（这条不是省略，是缺口，写在 §七第 2 条）。
+值得一提：那八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
 是由 `node --test test/` 那份带文件名的输出确认的（`✔ test/anchor.test.mjs` 紧跟它的 `rows: 43`，
-往下 book 13 / game 23 / library 17 / model 25 / rng 13 / solve 16 / storage 15）。
+往下 anim 6 / book 13 / game 23 / library 17 / model 25 / rng 13 / solve 16 / storage 15）。
 `node --test test/` 这条写法（`README` 旧版与
-`js/main.js:112` 都提到）本轮也复跑过，结论行是 `ℹ tests 8 / ℹ pass 8 / ℹ fail 0`
-—— 注意那个 `tests 8` 数的是**文件数**，不是断言数，八行 `rows:` 与上表逐字相同。
+`js/main.js:112` 都提到）本轮也复跑过，结论行是 `ℹ tests 9 / ℹ pass 9 / ℹ fail 0`
+—— 注意那个 `tests 9` 数的是**文件数**，不是断言数，九行 `rows:` 与上表逐字相同。
 
 ---
 
@@ -77,11 +80,11 @@ rows: 15 fail: 0     # storage
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit`（`package.json:14`） | **跑过，rc=0**，输出见 §一 |
-| `npm run check` | 上面那条 26 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
-| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），八个文件按字母序，任一非零立即中止 | **跑过**，八行 `rows: N fail: 0` |
+| `npm run check` | 上面那条 30 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:59`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
-| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 八套 + 真 Chrome 五场景 | **本轮禁跑**，见 §七 |
+| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 九套 + 真 Chrome 五场景 | **本轮禁跑**，见 §七 |
 | `npm run bake` | `node tools/bake.mjs`（`package.json:11`）：全宇宙判定 + 逐关独立建表 + 两路对账，然后**覆写 `js/data/lots.js`**（`tools/bake.mjs:219-221`） | **本轮未跑**：它会改写发货文件，改 `js/data/lots.js` 不在文档轮的可动范围内。它的结构量由只读路线复现（§五） |
 | `npm run electron` | `electron .`（`package.json:10`），入口 `electron/main.cjs`，它用 `startServer({port: 0})` 自己挑一个临时口（`electron/main.cjs:7-8`） | **跑不了**：`electron` 不在两个依赖表里，仓内也没有 `node_modules/`。本轮未尝试执行 |
 
@@ -120,27 +123,29 @@ UI 里没有任何第二套「合法」的定义。
 
 ## 四、门禁清单：`tools/` 里到底有什么
 
-`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 八套 node 测试在 `test/`（条数见 §一）：
+`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 九套 node 测试在 `test/`（条数见 §一）：
 
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
-| `tools/playtest.mjs`（551 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
+| `tools/playtest.mjs`（561 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
 | `tools/verify.sh`（175 行） | 生命周期与预检，**一条判据都不加**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性 | 本轮试跑：预检以 `rc=8` 拒绝，Chrome 与静态服务都没起（见 §七第 1 条） |
 
 五套浏览器场景的**条数**：`tools/verify.sh` 只打印 `rows: len(rows)` 并判 `fail`，**没有任何一处写着期望条数**。
-所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 15、`@play` 20、`@save` 12、`@routes` 14 个调用点
+所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 17、`@play` 20、`@save` 12、`@routes` 14 个调用点
 （其中一套在 `for (const tier of …)` 四档循环里 ⇒ 正常路径 17 行）、`@pointer` 25 个调用点
 （两条是循环内「走不通才报」的失败行、两对是 `if/else` 二选一 ⇒ 正常路径 21 行），
-合计**正常路径 85 行**。这个 85 与 `deliverable.md:17,112-116` 记录的 2026-09-27 那一次
-`@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21` 逐场景对得上 ——
+合计**正常路径 87 行**。与 `deliverable.md:17,112-116` 记录的 2026-09-27 那一次
+`@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21` 相比，只有 `@boot` 从 15 变 17：
+本轮发货了真位图，旧的「一个图片请求都不许有 + favicon 必须是内联 SVG」两行与新事实矛盾，
+被换成了四行新契约（见 §六）。其余四套逐场景仍然对得上。
 但请注意那是**别人那一次的读数 + 本轮的静态点数**，两者都不是本轮实测。
 
-`test/` 八套的条数是本轮实测交回的（§一那张表），逐套内容：
+`test/` 九套的条数是本轮实测交回的（§一那张表），逐套内容：
 `anchor 43`（外部锚点）、`book 13`（棋书完整性 + 范围守卫 + 完美性普查 419 全覆盖）、
 `game 23`（状态机、296 个错误首口全量）、`library 17`（发货文件逐关重解 + daily/random 纯度）、
-`model 25`（形状代数与负例）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
+`model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
 
 ---
 
@@ -215,10 +220,21 @@ UI 里没有任何第二套「合法」的定义。
 ## 六、目录结构（真实列出来的）
 
 ```
-index.html                 单 <canvas> 页面 + 面板；favicon 是内联 SVG data-URI（零外部请求）
-css/game.css               样式（109 行 / 4,582 B）
-js/main.js                 装配层：DOM、路由、存档、`window.chomp` 那张闸用的脸
-js/view.js                 canvas 程序绘制 + 手势几何（cellPoint / pointAt / clampToBar / goneSquares）
+index.html                 单 <canvas> 页面 + 面板 + HUD；图标是盘上真 PNG（favicon / apple-touch-icon /
+                           manifest 三处引用同一批文件），另挂 og 与 twitter 卡片、theme-color、manifest 链接
+manifest.webmanifest       可安装描述（27 行 / 1,440 B）：5 个 icons 全部指向 assets/icons/*.png，
+                           id / start_url ./ / scope ./ / display standalone / display_override / orientation /
+                           lang / 颜色 / categories / 2 个 shortcuts
+sw.js                      同名带版本缓存 chomp-cos-v2（92 行）：同源子资源**网络优先**（缓存优先 + 手写
+                           版本号会把旧 JS 永久钉死），activate 删掉一切非当前版本的缓存，离线时导航退回 index.html
+js/pwa.js                  注册器（31 行）：file:// 与非浏览器环境静默跳过并回报理由，不抛未捕获异常
+css/game.css               样式（183 行 / 8,203 B）：safe-area env() 内缩、button 44×44 命中区、
+                           暂停幕布、模态、kbd，以及真的 @media (prefers-reduced-motion: reduce)
+js/main.js                 装配层：DOM、路由、存档、暂停/静音/全屏/教学/键盘光标，`window.chomp` 那张闸用的脸
+js/view.js                 canvas 绘制 + 手势几何 + rAF 外壳（cellPoint / pointAt / clampToBar / goneSquares /
+                           start / stop / setPaused / spriteReport）
+js/core/anim.js            固定步长模拟（150 行）：SIM_STEP=1/120、MAX_STEPS=20、种子 LCG；`advance` 是 dt 唯一入口
+js/core/audio.js           WebAudio 音色表与**真静音**：静音走 suspend/resume，且在每个 create* 之前判 muted
 js/core/shapes.js          位置模型：序理想向量、validateShape、legalBites、applyBite、可达集闭包
 js/core/solve.js           穷举 + 记忆化 minimax、全宇宙自底向上表、三条闭式
 js/core/book.js            棋书编解码；lookup 越界**抛异常**；report/winningBitesOf 纯查表
@@ -226,27 +242,39 @@ js/core/game.js            对局状态机：轮次、非法一口不计数、�
 js/core/make.js            四个档位、候选 census、出题门槛与拒绝原因
 js/core/library.js         池 API：verifyLot/verifyPool、derive、#/daily、#/random
 js/core/rng.js             hashSeed（FNV-1a 派生的两轮 UTF-16 混合）+ mulberry32
-js/core/storage.js         一个 localStorage 键；唯一被允许提 window 的 core 模块，requireBackend 会抛
+js/core/storage.js         一个 localStorage 键（含 settings 段：muted / seenTutorial / motionOverride）；
+                           唯一被允许提 window 的 core 模块，requireBackend 会抛
+assets/gen/make_art.py     **唯一图源**（448 行 / 19,039 B，python3 + Pillow）：母题图标 13 张、
+                           游戏内 cocoa / foil / skull / crumb 4 张、og 卡 1 张；`--check` 读 IHDR 对账
+assets/icons/ assets/textures/ assets/og/   上面那支脚本产出的 18 张真 PNG（无一张 0 字节、无 SVG 冒充）
 js/data/lots.js            生成物：BOOK（419 行）+ 32 关 + TIERS_META + DAILY_IDS（本轮实测 15,266 B，
                            BAKED_AT 2026-09-27T10:19:32.740Z，SCHEMA chomp-lots-v1）
-server.cjs                 零依赖静态服务（5201，root 形态）；CommonJS，Electron 的 main 也 require 它
+server.cjs                 零依赖静态服务（5201，root 形态）；CommonJS，Electron 的 main 也 require 它；
+                           本轮补 `.webmanifest → application/manifest+json`，缺它装不上
 electron/main.cjs          桌面壳（34 行，port 0 自挑）；`electron` 未列为依赖，故本机跑不起来
 tools/harness.mjs          微型框架（node 与浏览器同形输出）
 tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
-tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景
+tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（561 行 / 35,652 B）
 tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
-test/*.test.mjs            八套 node 套件（anchor book game library model rng solve storage）
+test/*.test.mjs            九套 node 套件（anchor anim book game library model rng solve storage）
 test/fixture.mjs           手算期望值（12 条 fixture + 两行阶梯 + 单行向量），被 anchor/solve 引用
 test/naive.mjs             第三份独立实现的枚举与无记忆化暴力递归，测试专用
 .github/workflows/ci.yml   unit + browser 两个 job（browser 跑 SKIP_UNIT=1 / WD_TIMEOUT=240）
-.github/workflows/pages.yml 只 `cp index.html css js` → _site
+.github/workflows/pages.yml 组装 _site 并**当场对账**：index.html 与 manifest 指到的每条路径必须在产物里，
+                           产物里 ≥11 张非空 PNG；assets/gen（构建期脚本）不进产物
 DESIGN.md / deliverable.md README.md LICENSE .gitignore
 ```
 
-没有 `tests/` 这个目录（是 `test/`），没有构建产物目录、没有资源目录：画面全部 canvas 2D 程序绘制，
-`@boot` 里有一条断言在读 `performance.getEntriesByType('resource')`，要求没有任何
-`.png/.jpe?g/.gif/.woff2?/.mp3/.svg` 结尾的请求 —— 但 `data:` URI 是放行支，
-紧接着另一条要求 favicon 必须是内联 `data:image/svg+xml`（`tools/playtest.mjs:370-371`，本轮未跑）。
+没有 `tests/` 这个目录（是 `test/`），也没有构建产物目录。资源目录 `assets/` 是本轮新增的，
+但它不是"手工塞进来的图"：唯一的图源是 `assets/gen/make_art.py`，18 张 PNG 全部由它算出来，
+`--check` 读 IHDR 与期望表对账（读数见 §一最后一行）。canvas 上仍然是程序绘制为主 ——
+贴图只是在解码成功时叠一层颗粒与箔纹，`sprites.skull.ready` 为假就走 `skull()` 那条手绘路径，
+所以拔掉 `assets/` 页面照样能画，只是不好看了。
+`@boot` 里读 `performance.getEntriesByType('resource')` 的那两条断言已随本轮改写：旧的那条要求
+"一个图片请求都不许有、favicon 必须是内联 `data:image/svg+xml`"，那是**没有美术的口径**；
+现在钉的是新口径 —— 每个位图请求都必须是同源 `/assets/` 下的 `.png`、一个 webfont/音频/SVG
+光栅请求都不许有、三处 icon `<link>` 都指向盘上真 PNG 且含 180px 那张、四张贴图在页面里
+必须报 `ready` 而不是退回程序绘制（`tools/playtest.mjs:370-381`，本轮**未跑**，见 §七第 1 条）。
 
 ---
 
@@ -258,7 +286,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
    跑完之后 `:5201` 与 `:9361` 上仍然没人听。这一条就是 §八 那句「占号就当红，不借用」的实现证据。
    台架纪律写在 `DESIGN.md` 第十节，预检本身在 `tools/verify.sh:27-44`（`exit 6/7/8` 三种抢口各一种）。
    所以 §一最后一行与 §四那五套条数**没有本轮实测**：它们分别是「源码里 `rec()` 调用点的静态计数」
-   （本轮重数过一遍：boot 15 / play 20 / routes 14 / save 12 / pointer 25 个调用点，
+   （本轮重数过一遍：boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点，
    按 `tools/playtest.mjs:336` 起的场景分段数的）与
    `deliverable.md:112-116` 记录的 2026-09-27 读数。两者互相吻合，但吻合不等于本轮跑绿过。
 2. **不承诺「断言条数不会缩水」。** `tools/verify.sh:139` 那行只把 `rows` 的数量**打印**出来，

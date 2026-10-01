@@ -1,12 +1,13 @@
 // The animation state: a fixed-step accumulator, so nothing on screen depends on the display
 // refresh. `advance(a, elapsed)` is the ONLY place a frame delta enters the simulation; inside
 // `step()` every term is `x += v * s` with s === SIM_STEP, which is why the same state comes out
-// of 30, 60 and 120 Hz. The frame-rate harness in /tmp proves that by feeding all three rates
-// against one seeded LCG and diffing every field, and it proves itself by mutating the
-// `accumulator += elapsed` line into a constant (that must go red).
+// of 30, 60 and 120 Hz.
 //
 // It is a pure module — no canvas, no window, no DOM — so `node --test` can drive it directly
-// (test/anim.test.mjs) and the browser can render from it without owning any of the maths.
+// (test/anim.test.mjs) and the browser can render from it without owning any of the maths. That
+// suite is both the proof and the proof-of-the-proof: it feeds 30/60/120 Hz against one seeded
+// LCG and diffs every field, and `CHOMP_ANIM=<mutant> node test/anim.test.mjs` must go red when
+// the accumulator line below is frozen to a constant.
 
 export const SIM_STEP = 1 / 120;   // 120 Hz fixed step: every display rate is a multiple-ish
 export const MAX_STEPS = 20;       // a 168 ms hitch may not turn into a particle avalanche

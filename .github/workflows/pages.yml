@@ -20,15 +20,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # No bundler and no dependencies: the game ships plain ES modules, so the site is a
-      # file copy. Only these paths are reachable from index.html — keep the server, the
-      # electron shell, the bake tool and the tests out of the artifact. The exhaustive
-      # minimax table is baked into js/data/lots.js by tools/bake.mjs and shipped as a source
-      # file like any other, so the browser never has to solve anything to display a verdict.
+      # file copy. Everything reachable from index.html goes in — the ES modules, the stylesheet,
+      # the generated bitmaps under assets/, the manifest and the service worker (a PWA whose
+      # manifest 404s is not installable, and a 404 sw.js is a permanently dead cache). What
+      # stays out: the generator (assets/gen — python, build-time only), the server, the electron
+      # shell, the bake tool and the tests. The exhaustive minimax table is baked into
+      # js/data/lots.js by tools/bake.mjs and shipped as a source file like any other, so the
+      # browser never has to solve anything to display a verdict.
       - name: Assemble static site
         run: |
           mkdir _site
-          cp index.html _site/
+          cp index.html manifest.webmanifest sw.js _site/
           cp -r css js _site/
+          mkdir -p _site/assets
+          cp -r assets/icons assets/textures _site/assets/
+      - name: Every path index.html and the manifest point at really shipped
+        run: |
+          grep -oE '(href|src)="[^"]+"' index.html | sed -E 's/.*"([^"]+)".*/\1/' \
+            | grep -vE '^(data:|http|mailto)' \
+            | while read -r p; do
+                test -f "_site/${p#./}" || { echo "MISSING in artifact: $p"; exit 1; }
+              done
+          python3 -c 'import json,os,sys; missing=[i["src"] for i in json.load(open("_site/manifest.webmanifest"))["icons"] if not os.path.isfile(os.path.join("_site", i["src"].lstrip("./")))]; print("\n".join("MISSING icon: "+m for m in missing)); sys.exit(1 if missing else 0)'
+          test "$(find _site/assets -name '*.png' -size +1c | wc -l)" -ge 11 || { echo "artifact bitmaps missing or empty"; exit 1; }
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
