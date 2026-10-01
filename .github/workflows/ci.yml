@@ -30,6 +30,26 @@ jobs:
       - name: Suites
         run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
 
+  # The 18 shipped bitmaps are generated, not hand-placed, so CI re-derives them and compares
+  # bytes: `--check` rebuilds the whole set into a temp dir (twice, to separate "not deterministic
+  # even here" from "this machine has different fonts") and sha256s every file against what is on
+  # disk. A hand-edited PNG, a downscale that was pasted in, a flat colour block standing in for a
+  # sprite, or a generator that drifted without a rebuild all fail this job. One image is exempt
+  # from the byte rule by design — the og card draws text with whatever font the runner has
+  # (`FONT_DEPENDENT` in make_art.py says so in code); it is still checked for IHDR, non-zero size
+  # and same-machine determinism.
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pillow（生成器唯一的依赖）
+        run: python3 -m pip install --quiet pillow
+      - name: make_art.py --check
+        run: python3 assets/gen/make_art.py --check
+
   # The shell is only proven by driving a real page with real mouse events: the canvas hit test,
   # the refused-poison-square rule and the save file all live behind `window.chomp`.
   browser:

@@ -22,8 +22,10 @@ import hashlib
 import math
 import os
 import random
+import shutil
 import struct
 import sys
+import tempfile
 
 try:
     from PIL import Image, ImageChops, ImageDraw, ImageFont
@@ -49,9 +51,24 @@ GHOST = (43, 26, 16)
 CRUMB = (122, 74, 36)
 
 ICON_SIZES = [16, 32, 48, 64, 96, 128, 180, 192, 512, 1024]
+# 盘上应有的每张位图与它的期望宽高（`--check` 的对账表，也是 build() 的产物清单）
+EXPECTED = {}
+for _s in ICON_SIZES:
+    EXPECTED['assets/icons/icon-%d.png' % _s] = (_s, _s)
+EXPECTED['assets/icons/favicon-32.png'] = (32, 32)
+EXPECTED['assets/icons/apple-touch-icon.png'] = (180, 180)
+EXPECTED['assets/icons/maskable-512.png'] = (512, 512)
+EXPECTED['assets/textures/cocoa-256.png'] = (256, 256)
+EXPECTED['assets/textures/foil-256.png'] = (256, 256)
+EXPECTED['assets/textures/skull-160.png'] = (160, 160)
+EXPECTED['assets/textures/crumb-48.png'] = (48, 48)
+EXPECTED['assets/og/chomp-og.png'] = (1200, 630)
+# og 卡上排了字：字体按 FONT_CANDIDATES 就地取材，找不到就退化成纯图形。所以**只有这一张**
+# 的字节不保证跨机器相同，字节门禁绕开它（绕开不等于放弃：它仍查 IHDR、0 字节与本机确定性）。
+FONT_DEPENDENT = {'assets/og/chomp-og.png'}
 BAR_ROWS = 3
 BAR_SHAPE = (3, 3, 1)   # 右下咬掉一个 2x2 象限后剩下的 L 形：一个真实残局
-SEED_GRAIN = 20260930   # 固定种子：同一份脚本在任何机器上画出同一张图
+SEED_GRAIN = 20260930   # 固定种子：同一台机器上重跑，字节必须全等（跨机器只有 og 卡不稳，见 FONT_DEPENDENT）
 
 
 def lerp(a, b, t):
@@ -287,28 +304,36 @@ def texture_foil(size=256):
     return img
 
 
+def supersample(size, paint, ss=4):
+    """按 ss 倍画再 LANCZOS 缩回来。PIL 的 ellipse/polygon 不做抗锯齿：直接按目标尺寸画，
+    骷髅只有 3 个色值、碎屑只有 4 个，贴到巧克力上就是一块锯齿。图标是 1024 缩放下来的，
+    游戏内贴图也得到同一档品质 —— 母题才是一套东西，不是两堆。"""
+    big = size * ss
+    img = Image.new('RGBA', (big, big), (0, 0, 0, 0))
+    paint(img, big)
+    return img.resize((size, size), Image.LANCZOS)
+
+
 def sprite_skull(size=160):
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    skull(img, size / 2, size * 0.42, size * 0.30, detail=True)
-    return img
+    return supersample(size, lambda img, s: skull(img, s / 2, s * 0.42, s * 0.30, detail=True))
 
 
 def sprite_crumb(size=48):
     """咬下来那一粒巧克力屑：不规则多边形 + 顶面高光，喂给 dt 粒子系统。"""
-    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img, 'RGBA')
-    rnd = random.Random(7)
-    cx, cy, r = size / 2, size / 2, size * 0.42
-    pts = []
-    for i in range(9):
-        a = i / 9 * math.tau
-        rr = r * (0.72 + 0.38 * rnd.random())
-        pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
-    d.polygon(pts, fill=CRUMB + (255,))
-    d.polygon([(cx + (p[0] - cx) * 0.72, cy + (p[1] - cy) * 0.72 - r * 0.10) for p in pts[:5]],
-              fill=(168, 116, 68, 230))
-    d.ellipse([cx - r * 0.26, cy - r * 0.52, cx + r * 0.04, cy - r * 0.18], fill=(220, 186, 140, 160))
-    return img
+    def paint(img, s):
+        d = ImageDraw.Draw(img, 'RGBA')
+        rnd = random.Random(7)
+        cx, cy, r = s / 2, s / 2, s * 0.42
+        pts = []
+        for i in range(9):
+            a = i / 9 * math.tau
+            rr = r * (0.72 + 0.38 * rnd.random())
+            pts.append((cx + rr * math.cos(a), cy + rr * math.sin(a)))
+        d.polygon(pts, fill=CRUMB + (255,))
+        d.polygon([(cx + (p[0] - cx) * 0.72, cy + (p[1] - cy) * 0.72 - r * 0.10) for p in pts[:5]],
+                  fill=(168, 116, 68, 230))
+        d.ellipse([cx - r * 0.26, cy - r * 0.52, cx + r * 0.04, cy - r * 0.18], fill=(220, 186, 140, 160))
+    return supersample(size, paint)
 
 
 # ---------------------------------------------------------------- social card
@@ -417,23 +442,94 @@ def digest():
     return h.hexdigest()[:12]
 
 
+def sha256_file(path):
+    with open(path, 'rb') as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def rel_of(path):
+    return '/'.join(('assets', os.path.basename(os.path.dirname(path)), os.path.basename(path)))
+
+
+def color_count(path, floor=1 << 18):
+    """不同色值个数。用来把「0 字节之外另一种占位符」也判红：一张纯色/两色的图不论多大都是占位。"""
+    with Image.open(path) as im:
+        cols = im.convert('RGBA').getcolors(maxcolors=floor)
+    return len(cols) if cols is not None else floor
+
+
+def rebuild_all():
+    """把全套重画进临时目录，连画两遍。盘上那些图到底是不是这支脚本算的，只有重画一遍才知道；
+    第二遍是为了把「同一台机器上不确定」和「跨机器的字体差异」这两件事分开。"""
+    global ICON_DIR, TEX_DIR, OG_DIR
+    keep = (ICON_DIR, TEX_DIR, OG_DIR)
+    tmp = tempfile.mkdtemp(prefix='chomp-art-check-')
+    try:
+        ICON_DIR, TEX_DIR, OG_DIR = (os.path.join(tmp, 'assets', d) for d in ('icons', 'textures', 'og'))
+        first = {rel_of(p): sha256_file(p) for p in build()}
+        second = {rel_of(p): sha256_file(p) for p in build()}
+    finally:
+        ICON_DIR, TEX_DIR, OG_DIR = keep
+        shutil.rmtree(tmp, ignore_errors=True)
+    return first, second
+
+
+def check_assets():
+    """README 承诺「发货的每张图都能从仓里的脚本重算出来」——那必须是一条会红的命令，
+    不能只是一段话。这里对账四件事：在不在盘上、IHDR 尺寸对不对期望表、是不是平色占位、
+    字节能不能由本脚本复现。任何一条不成立都退出码 1。"""
+    problems = []
+    for rel, (w, h) in sorted(EXPECTED.items()):
+        p = os.path.join(REPO, rel)
+        if not os.path.exists(p):
+            problems.append('缺失 %s' % rel)
+            continue
+        if os.path.getsize(p) == 0:
+            problems.append('0 字节 %s' % rel)
+            continue
+        got = png_dims(p)
+        if got != (w, h):
+            problems.append('%s IHDR %dx%d，期望 %dx%d' % (rel, got[0], got[1], w, h))
+    # 平色占位门禁：最小的那张（crumb 48）也有几百个色值，地板放 16 只抓纯色块
+    for rel in sorted(EXPECTED):
+        p = os.path.join(REPO, rel)
+        if os.path.isfile(p) and os.path.getsize(p):
+            n = color_count(p)
+            if n < 16:
+                problems.append('%s 只有 %d 个不同色值 —— 平色块占位，不是画出来的资产' % (rel, n))
+    font_used = find_font(104)[1] or '（无字体，退化为纯图形）'
+    first, second = rebuild_all()
+    nondet = sorted(r for r in first if first[r] != second[r])
+    if nondet:
+        problems.append('本机重画两次就不一样（不确定，谈何复现）：%s' % ', '.join(nondet))
+    stale = sorted(r for r in first if r not in FONT_DEPENDENT and sha256_file(os.path.join(REPO, r)) != first[r])
+    if stale:
+        problems.append('盘上的图与本脚本算出来的字节不同（手改过、或者生成器变了没重画）：%s' % ', '.join(stale))
+    og_note = '字节相同' if sha256_file(os.path.join(REPO, 'assets/og/chomp-og.png')) == first['assets/og/chomp-og.png'] \
+        else '与本机重画不同（字体相关，不计入门禁）'
+    big = [r for r, (w, h) in EXPECTED.items() if min(w, h) >= 180]
+    covered = [r for r in first if r not in FONT_DEPENDENT]
+    present = [r for r in EXPECTED
+               if os.path.isfile(os.path.join(REPO, r)) and os.path.getsize(os.path.join(REPO, r))]
+    scarce = min((color_count(os.path.join(REPO, r)), r) for r in present)
+    print('应存在 %d 张 / 盘上在 %d 张 / 边长≥180 %d 张' % (len(EXPECTED), len(present), len(big)))
+    print('字节复现 %d/%d 张与本机重画全等（og 卡除外；本机字体 %s，它：%s）'
+          % (len(covered) - len(stale), len(covered), font_used, og_note))
+    print('色值最少的一张：%s = %d 个（平色占位地板 16）' % (scarce[1], scarce[0]))
+    print('指纹 sha256[:12] =', digest())
+    for msg in problems:
+        print('  BAD', msg)
+    print('资产对账：%d 项问题' % len(problems))
+    raise SystemExit(1 if problems else 0)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--check', action='store_true', help='只校验盘上资产，不重写')
+    ap.add_argument('--check', action='store_true',
+                    help='只校验盘上资产：IHDR 对账 / 平色占位 / 能否由本脚本逐字节重算出来')
     args = ap.parse_args()
     if args.check:
-        want = ['assets/icons/icon-%d.png' % s for s in ICON_SIZES] + [
-            'assets/icons/favicon-32.png', 'assets/icons/apple-touch-icon.png',
-            'assets/icons/maskable-512.png', 'assets/textures/cocoa-256.png',
-            'assets/textures/foil-256.png', 'assets/textures/skull-160.png',
-            'assets/textures/crumb-48.png', 'assets/og/chomp-og.png']
-        missing = [p for p in want if not os.path.exists(os.path.join(REPO, p))]
-        zero = [p for p in want if os.path.exists(os.path.join(REPO, p)) and os.path.getsize(os.path.join(REPO, p)) == 0]
-        big = [p for p in want if min(png_dims(os.path.join(REPO, p))) >= 180] if not missing else []
-        print('应存在 %d 张 / 缺失 %d / 0字节 %d / 边长≥180 %d' % (len(want), len(missing), len(zero), len(big)))
-        for p in missing + zero:
-            print('  BAD', p)
-        raise SystemExit(1 if (missing or zero) else 0)
+        check_assets()
     produced = build()
     print('生成 %d 张 PNG：' % len(produced))
     for p in produced:

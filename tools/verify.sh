@@ -98,6 +98,11 @@ if [ -z "${SKIP_UNIT:-}" ]; then
     echo "--- $f"
     node "$f" || FAILED=1
   done
+  # The shipped bitmaps are generated, so reconcile them against the generator on every run: a
+  # hand-edited PNG or a drifted make_art.py fails here instead of shipping. Needs Pillow; the
+  # generator prints its own reason and exits non-zero, which counts as a failure, not a skip.
+  echo "--- assets/gen/make_art.py --check"
+  python3 "$HERE/assets/gen/make_art.py" --check || FAILED=1
 fi
 
 export CDP_PORT
