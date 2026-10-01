@@ -153,6 +153,47 @@ test('坏存档不会让开局崩掉：半截 JSON、脏字段、类型胡来一
   delete globalThis.window;
 });
 
+test('分段解码：坏一条只丢那一条，同档的好记录照读', async () => {
+  const ls = fakeStorage();
+  globalThis.window = { localStorage: ls };
+
+  // 顶层 null：JSON.parse 成功、但不是对象，必须当空档而不是往下取字段
+  ls.data.set(SAVE_KEY, 'null');
+  const a = await freshStore();
+  eq(a.store.unlocked, 1, 'null 载荷当空档');
+  eq(Object.keys(a.store.records).length, 0);
+
+  // 三条坏记录夹在两条好记录中间：null、数组、裸字符串
+  ls.data.set(SAVE_KEY, JSON.stringify({
+    records: {
+      'shoal-01': { best: 4, plays: 2, won: true },
+      'shoal-02': null,
+      'shoal-03': ['oops'],
+      'shoal-04': 'poison',
+      'shoal-05': { best: 9, plays: 1, won: true },
+    },
+    daily: { '2026-09-26': null, '2026-09-27': { id: 'daily-2026-09-27', won: true } },
+    unlocked: 'many',
+    settings: null,
+  }));
+  const b = await freshStore();
+  eq(Object.keys(b.store.records).length, 2, '只丢那三条，不是整档作废');
+  eq(b.store.record('shoal-01').best, 4, '邻居活着');
+  eq(b.store.record('shoal-05').best, 9);
+  eq(b.store.record('shoal-02'), null, '丢掉的位点读出 null 而不是抛');
+  eq(b.store.record('shoal-03'), null);
+  eq(b.store.record('shoal-04'), null);
+  eq(Object.keys(b.store.daily).length, 1, 'daily 同理');
+  eq(b.store.dailyDone('2026-09-27').won, true);
+  eq(b.store.unlocked, 1, 'unlocked 是字符串等于没解锁');
+  eq(b.store.settings.muted, false, 'settings 段坏了只丢这一段');
+  eq(b.store.totals().solved, 2, '统计只数活下来的');
+  b.store.finish('shoal-02', { won: true, plies: 5 });
+  eq(b.store.record('shoal-02').best, 5, '被丢的那条还能重新记上');
+  eq(b.store.record('shoal-01').best, 4, '而且不动邻居');
+  delete globalThis.window;
+});
+
 test('被拒绝的 localStorage（setItem 抛异常）只影响持久，不影响 playable', async () => {
   const ls = fakeStorage();
   ls.setItem = () => { throw new Error('QuotaExceeded'); };

@@ -34,7 +34,7 @@
 | 位置模型的物理不变式：非增行长向量（序理想），悬空的格子不存在 | `node test/model.test.mjs` | `validateShape` 的四组负例（空向量 / 非增 / 0 与负长度 / 非整数与非数组，`test/model.test.mjs:23-44`）+ `applyBite` 对宇宙逐口仍产出合法形状（下限断言 `n > 500` 条边，实测到的边数只在失败时打印）+ 闭包数 == 序理想计数 == 矩形闭式 `C(r+w,r)-1`（`test/model.test.mjs:158-188`） | `rows: 25 fail: 0` |
 | 求解器自洽，且**三条独立路线**给出同一张判定表 | `node test/solve.test.mjs` | 每关独立表 vs 全宇宙自底向上 vs `test/naive.mjs` 那份独立重写的枚举，419 个局面逐点一致（`test/solve.test.mjs:110-138`）；反证：去掉毒格规则后整张表翻成全 N | `rows: 16 fail: 0` |
 | 每日一题与分享链接在任何设备上落同一根巧克力 | `node test/rng.test.mjs` | `hashSeed` 是纯函数、是 FNV-1a **派生**的两轮 UTF-16 混合（对 6 个 ASCII 种子逐个证明与教科书 FNV-1a 不同，`test/rng.test.mjs:57-66`）；日期→种子→池内下标链路跨进程一致 | `rows: 13 fail: 0` |
-| 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
+| 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`）；**分段解码**：垃圾样本 `null` 载荷 / 缺字段 / 类型错 / 越界值各一条，外加一份把 `null`、数组、裸字符串三条坏记录夹在两条好记录中间的档 —— 只丢那三条，同档邻居与 `daily`、`settings` 段照读，丢掉的位点还能重新记账（`js/core/storage.js:58-87`）。反证：把 decode 换成一段式 `{ ...blank(), ...p }` 合并，**2 行判红**（`Object.keys(records).length` 5≠2、`daily` 2≠1），不是空跑 | `rows: 16 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 上面那条量的是 anim 模块；**关卡内**（一局正在打的巧克力）也得三档一致 | `node test/frame.test.mjs` | 官方量具 `cos_frame_probe.js` 用 vm 顺序执行 `<script src>`，读不了本仓 ESM，对本仓只输出「结论：无法比对（SyntaxError: ...）」——既不算绿也不算红。这个套件用真实发盘的 master/twined 关卡池 16 张开局，每口走 `playerBite`（真改棋盘 + 对手按谱回口），取数点断言 `status==='playing'`；两把尺分开：按步号对齐（判末态一致）与按游玩时长对齐（判推进步数一致，这一把才藏不住累加器行的错配）。反证两发内建为断言，并同时钉「真模块必须绿」，防尺子空跑 | `rows: 6 fail: 0`；三档 `simSteps 272/272/272`、`particles 19/19/19`、逐粒子 8 字段最大偏差 `0.00e+0`、帧数 `68/136/272` 不同而末态全等；两发变异对照判红于 `steps=136/272/544`（差 408）与 `steps=68/136/272`（差 204） |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源。`--check` 对账四件事：① 期望表 `EXPECTED`（`assets/gen/make_art.py:55`）逐张核 IHDR 宽高；② `color_count` 平色地板 16（`assets/gen/make_art.py:454`）—— 挡掉「不是 0 字节、但也不是画出来的」那种占位；③ `rebuild_all()` 把全套重画进临时目录**连画两遍**，两遍不一致即本机不确定；④ 除 og 卡外逐张比 sha256 与盘上字节，不一致就是手改过或生成器漂移。og 卡排了字、字体就地取材（`FONT_DEPENDENT`，`assets/gen/make_art.py:68`），只对本机确定性负责 —— 这条豁免写在代码与这里，不假装成跨机器字节全等 | 本轮读数 `应存在 18 张 / 盘上在 18 张 / 边长≥180 9 张`、`字节复现 17/17 张与本机重画全等（og 卡本机字体 Arial Bold.ttf 亦字节相同）`、`色值最少的一张 assets/icons/icon-16.png = 188 个`、`指纹 sha256[:12] = acc1d7ed544e`、rc=0。三发阴性对照**全部判红**：icon-512 尾部追加 1 字节 ⇒ `BAD ... 字节不同`；crumb-48 换成纯色块 ⇒ `BAD 只有 1 个不同色值 —— 平色块占位`；apple-touch-icon 换成 120×120 ⇒ `BAD IHDR 120x120，期望 180x180`；三发退出码均为 1 |
@@ -59,15 +59,15 @@ rows: 17 fail: 0     # library
 rows: 25 fail: 0     # model
 rows: 13 fail: 0     # rng
 rows: 16 fail: 0     # solve
-rows: 15 fail: 0     # storage
+rows: 16 fail: 0     # storage  ← 本轮新增一行：分段解码的垃圾档实测
 ```
 
-**177 是把上面十行加起来的和**（本轮之前是九行 171，`deliverable.md:16,102,152` 记的是更早的
+**178 是把上面十行加起来的和**（本轮之前是九行 171，`deliverable.md:16,102,152` 记的是更早的
 165 —— 那是上一轮有人手加之后抄进记录行的，不是判据），仓里没有任何一条**命令**印这个总数，
 也没有「少跑一套就红」的地板（这条不是省略，是缺口，写在 §七第 2 条）。
 每条数字归属哪个套件，由 `npm run unit` 的字母序循环与套件自己的文件头注释对齐（十行依次是
 anchor 43 / anim 6 / book 13 / frame 6 / game 23 / library 17 / model 25 / rng 13 / solve 16 /
-storage 15）。顺带修正一条旧口径：`node --test test/` **不是**本仓的跑法 —— 这些套件是自跑的
+storage 16）。顺带修正一条旧口径：`node --test test/` **不是**本仓的跑法 —— 这些套件是自跑的
 独立脚本（各自 `import { run }` 并 `process.exit`），把目录交给 node 的 test runner 会得到
 `# tests 1 / # pass 0 / # fail 1`（runner 把 `test/` 当成一个失败的子测试，`MODULE_NOT_FOUND`），
 上一轮 README 记的 `tests 9 / pass 9` 在本轮复现不出来，已按实测口径改写。
@@ -83,7 +83,7 @@ storage 15）。顺带修正一条旧口径：`node --test test/` **不是**本�
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit`（`package.json:14`） | **跑过，rc=0**，输出见 §一 |
 | `npm run check` | 上面那条 31 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
-| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十个文件按字母序，任一非零立即中止 | **跑过**，十行 `rows: N fail: 0`（合计 177，见 §一） |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十个文件按字母序，任一非零立即中止 | **跑过**，十行 `rows: N fail: 0`（合计 178，见 §一） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:59`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
 | `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 十套 + 真 Chrome 五场景 | **本轮禁跑**，见 §七 |
@@ -125,7 +125,7 @@ UI 里没有任何第二套「合法」的定义。
 
 ## 四、门禁清单：`tools/` 里到底有什么
 
-`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 九套 node 测试在 `test/`（条数见 §一）：
+`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 十套 node 测试在 `test/`（条数见 §一）：
 
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
@@ -144,10 +144,10 @@ UI 里没有任何第二套「合法」的定义。
 被换成了四行新契约（见 §六）。其余四套逐场景仍然对得上。
 但请注意那是**别人那一次的读数 + 本轮的静态点数**，两者都不是本轮实测。
 
-`test/` 九套的条数是本轮实测交回的（§一那张表），逐套内容：
+`test/` 十套的条数是本轮实测交回的（§一那张表），逐套内容：
 `anchor 43`（外部锚点）、`book 13`（棋书完整性 + 范围守卫 + 完美性普查 419 全覆盖）、
 `game 23`（状态机、296 个错误首口全量）、`library 17`（发货文件逐关重解 + daily/random 纯度）、
-`model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
+`model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 16`（存档单调性 + 分段解码的垃圾档实测）。
 
 ---
 
