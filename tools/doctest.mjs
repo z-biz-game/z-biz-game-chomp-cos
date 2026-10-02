@@ -658,8 +658,8 @@ for (const r of ledger) {
 
 // ================================================================ D12 自数：这道闸自己发多少项
 // 文档点到 D12，而本组的编号要等它自己第一条 ok() 之后才进 `emitted`——"这一组在不在跑"这件事
-// 只能由"正在跑这一组的代码"来自证。先把自己登记上不是放宽：删掉本组任何一条，D12a 的
-// `emitted.size === 12`、D12b/D12c 的条数与 D12d 的 EXPECT_ROWS 会一起红。
+// 只能由"正在跑这一组的代码"来自证。先把自己登记上不是放宽：删掉本组任何一条，D12a 那条
+// 组数地板、D12b/D12c 的条数与 D12d 的 EXPECT_ROWS 会一起红。
 emitted.add('D12');
 const dMentions = [...new Set(all(DOCTEXT, /(?<![A-Za-z0-9_])D\d+/g).map((x) => x[0]))].map((x) => +x.slice(1));
 ok(dMentions.every((v) => emitted.has(`D${v}`)), 'D12 文档点名的每个 D 编号这一次都真的跑了（删掉一组就会红）', `文档点到 ${dMentions.sort((a, b) => a - b).join(',')} / 其中这一轮没发出：${dMentions.filter((v) => !emitted.has(`D${v}`)).join(',') || '无'}`);
