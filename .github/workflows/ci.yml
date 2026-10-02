@@ -29,6 +29,18 @@ jobs:
         run: for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f"; done
       - name: Suites
         run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+      # The documentation gate, byte for byte the command a contributor runs locally
+      # (`npm run doctest`). It re-runs the nine suites itself, so the floor in verify.sh and the
+      # numbers printed here are the same measurement.
+      - name: Doc numbers
+        run: node tools/doctest.mjs
+      # The sabotage ledger: twelve knives, one per gate group, each cut written into a throwaway
+      # copy of the tree. It must drive the doc gate red AND name the assertion it killed; then the
+      # working tree has to be untouched, because the ledger's rc column is committed.
+      - name: Sabotage ledger
+        run: |
+          node tools/sabotage.mjs
+          git diff --exit-code || { echo "台账跑完工作树是脏的：某一刀没把它的靶恢复回去"; exit 1; }
 
   # The shell is only proven by driving a real page with real mouse events: the canvas hit test,
   # the refused-poison-square rule and the save file all live behind `window.chomp`.
