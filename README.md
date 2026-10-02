@@ -140,7 +140,7 @@ UI 里没有任何第二套「合法」的定义。
 | `tools/doctest.mjs`（684 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 356 fail: 0`（本次实发 356 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/playtest.mjs`（561 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
-| `tools/sabotage.mjs`（229 行） | **破坏试验台账**：十二把刀，一组一把，每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
+| `tools/sabotage.mjs`（225 行） | **破坏试验台账**：十二把刀，一组一把，每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
 | `tools/verify.sh`（236 行） | 生命周期 + 两条腿的**计数复钉**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性。逻辑腿自己判三件事：`MIN_LOGIC_ROWS` 地板（`tools/verify.sh:31`）、文档闸的条数复钉 `DOCTEST_ROWS_WANT`（`tools/verify.sh:34`）、台账的刀数复钉 `SABOTAGE_KNIVES_WANT`（`tools/verify.sh:38`），两道新闸各只派生一次（`tools/verify.sh:64`、`tools/verify.sh:81`）；
 浏览器判据本身仍然只有「有没有 fail 行」 | 本轮逻辑腿跑过；浏览器腿见 §七第 1 条 |
 

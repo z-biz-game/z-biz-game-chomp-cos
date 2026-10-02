@@ -78,25 +78,21 @@ if (only.length && picked.length !== only.length) die(`点名的刀有几把不�
 if (!picked.length) die('一把刀都没选中');
 
 // ---- 预检：针唯一命中（引用性的命中不算）、期望点名的那条断言得真的写在闸里 ----
-// 两处「引用」要排掉，否则针永远命中不止一次、台账就成了自己锁死自己：
-//   * README 的台账行逐字抄着每一把的针（D11 要求逐字相同），那些命中不是「文档在主张这句话」；
-//   * 刀谱 KNIVES 字面量里就写着自己的 needle 串——S11 打的正是这张表，不排掉它的话
-//     `  { id: 'S6',` 在它自己的定义行上再命中一次，任何一把打在刀谱上的刀都无法存在。
+// 「引用」要排掉，否则针永远命中不止一次、台账就成了自己锁死自己。三类行是引用而不是主张：
+//   * README 的台账行逐字抄着每一把的针（D11 要求逐字相同）；
+//   * 代码里的 `//` 注释行——机制的解释文字会把被解释的那串字写出来（写了两次的人不该被打两次）；
+//     （只认 `//`：文档里的 `* 条目` 与 shell 的 `# 说明` 都是正文主张，不是引用。）
+//   * 刀谱里 `needle:` / `repl:` 那一行的**取值**：S11 打的正是这张表，那一行同时抄着别的刀的
+//     针，不排掉它的话 `  { id: 'S6',` 在自己的定义行之外还多命中一次，刀谱里的刀就无法存在。
+// 排掉的是**引用行**，不是整张刀谱：S11 那一把仍然打在 `{ id: 'S6', group: …` 的结构行上。
 // 与 tools/doctest.mjs 的 stripLedger 是同一条规则的两端。
-const target = (src, needle, file) => {
+const QUOTED_LINE = /^\s*(\/\/|(needle|repl): \S)|^\| S\d+ \| /;
+const target = (src, needle) => {
   const lines = src.split('\n');
-  const ledger = lines.map((l, i) => (/^\| S\d+ \| /.test(l) ? i : -1)).filter((i) => i >= 0);
-  const quoted = [];
-  if (file === 'tools/sabotage.mjs') {
-    const a = src.indexOf('const KNIVES = [');
-    const b = src.indexOf('\n];', a + 1);
-    if (a < 0 || b < 0) die('找不到 KNIVES 字面量的边界，无法判断哪些命中是刀谱自己的引用');
-    quoted.push([a, b]);
-  }
+  const quoted = lines.map((l, i) => (QUOTED_LINE.test(l) ? i : -1)).filter((i) => i >= 0);
   const isQuoted = (pos) => {
-    if (quoted.some(([p, q]) => pos >= p && pos < q)) return true;
     let up = 0;
-    for (let i = 0; i < lines.length; i++) { up += lines[i].length + 1; if (up > pos) return ledger.includes(i); }
+    for (let i = 0; i < lines.length; i++) { up += lines[i].length + 1; if (up > pos) return quoted.includes(i); }
     return false;
   };
   const at = [];
@@ -118,7 +114,7 @@ const DOCTEST = read('tools/doctest.mjs');
 for (const k of picked) {
   let src;
   try { src = read(k.file); } catch { die(`${k.id} 的文件不存在：${k.file}`); }
-  const hits = target(src, k.needle, k.file).length;
+  const hits = target(src, k.needle).length;
   if (hits !== 1) die(`${k.id} 的针在 ${k.file} 的台账行之外命中 ${hits} 次（必须恰好 1 次；打不中或打多了都不许跑）`);
   if (k.repl === k.needle) die(`${k.id} 的「改成」与针相同，这一刀不会改变任何东西`);
   const run = longestIn(DOCTEST, k.expect);
@@ -151,7 +147,7 @@ for (const k of picked) {
   const dst = makeCopy(k.id);
   const file = join(dst, k.file);
   const src = readFileSync(file, 'utf8');
-  const at = target(src, k.needle, k.file);
+  const at = target(src, k.needle);
   if (at.length !== 1) die(`${k.id} 落刀前在副本里命中 ${at.length} 次（副本与仓不同步？）`);
   writeFileSync(file, src.slice(0, at[0]) + k.repl + src.slice(at[0] + k.needle.length));
   const t0 = Date.now();
