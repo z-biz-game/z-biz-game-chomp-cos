@@ -71,7 +71,7 @@ file: 14.9 kB
 复现命令：
 
 ```sh
-node tools/bake.mjs && node --test test/
+npm run bake && npm run unit
 ```
 
 ## 改动表（先写错在哪 → 为什么对）

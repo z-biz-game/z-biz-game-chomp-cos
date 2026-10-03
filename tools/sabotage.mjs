@@ -1,10 +1,10 @@
 // 破坏试验台账：把每一类谎各写回一份**临时副本**里一遍，看文档闸会不会**点名**变红。
 //
-//   node tools/sabotage.mjs            跑 README「破坏试验台账」里的全部十二把刀
+//   node tools/sabotage.mjs            跑 README「破坏试验台账」里的全部十四把刀
 //   node tools/sabotage.mjs S1 S4      只跑点名的几把（调试用；子集跑不回写台账）
 //
 // 为什么要有这个文件：一份全绿的 doctest 只证明"这一轮文档与代码对得上"，它没有说**闸会不会红**。
-// 十二把刀一组一把，各自必须把闸打红**并且**点名它吃掉的那条断言；FAIL 行的原文进日志工件，
+// 一组一把（D3 有两把，各打一条不同的谎），各自必须把闸打红**并且**点名它吃掉的那条断言；FAIL 行的原文进日志工件，
 // 台账末列那个 rc 由脚本从子进程读回来，人不许抄。
 //
 // 四条硬规矩（与 kurotto/ferry 同机制）：
@@ -32,7 +32,7 @@ const sh = (cmd, args, opts = {}) => {
 };
 const gitStatus = () => sh('git', ['status', '--porcelain']).out.trim();
 
-// ---- 刀谱：十二把，一组一把，每把只做一个最小扰动 ----
+// ---- 刀谱：十四把，一组一把（D3 有两把，各打一条不同的谎），每把只做一个最小扰动 ----
 const KNIVES = [
   { id: 'S1', group: 'D1 census', where: '文档档位表里那一格的候选数被手改了一位', file: 'README.md',
     needle: '| 2 / 4 / 8，≥3 格 | 14 |', repl: '| 2 / 4 / 8，≥3 格 | 15 |',
@@ -55,8 +55,8 @@ const KNIVES = [
   { id: 'S7', group: 'D7 逐字文案', where: '文档抄的存储键名与源码不同串了', file: 'README.md',
     needle: '只有一个 localStorage 键 `chomp.save.v1`', repl: '只有一个 localStorage 键 `chomp.save.v2`',
     expect: 'D7 存档键名文档与源码同串' },
-  { id: 'S8', group: 'D8 浏览器静态点数', where: '场景调用点的静态计数被改了一个（17 → 18）', file: 'README.md',
-    needle: 'boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点', repl: 'boot 18 / play 20 / routes 14 / save 12 / pointer 25 个调用点',
+  { id: 'S8', group: 'D8 浏览器静态点数', where: '场景调用点的静态计数被改了一个（21 → 22）', file: 'README.md',
+    needle: 'boot 21 / play 20 / routes 14 / save 12 / pointer 25 个调用点', repl: 'boot 22 / play 20 / routes 14 / save 12 / pointer 25 个调用点',
     expect: 'D8 场景的 rec() 调用点数 == 文档写的数' },
   { id: 'S9', group: 'D9 墙钟纪律', where: '毫秒读数被摘掉了出处（"出处见 §6"没了）', file: 'DESIGN.md',
     needle: '耗时 0.03 s——那是读数，出处见 §6 计时量', repl: '耗时 0.03 s',
@@ -70,6 +70,12 @@ const KNIVES = [
   { id: 'S12', group: 'D12 自数', where: '闸自己的组数地板被调低（12 → 11）', file: 'tools/doctest.mjs',
     needle: 'emitted.size === 12', repl: 'emitted.size === 11',
     expect: 'D12a 这道闸自己是十二组' },
+  { id: 'S13', group: 'D3 套件', where: 'node --test 少派生一套（九支文件名被削成八支）', file: 'tools/doctest.mjs',
+    needle: '...SUITE_FILES.map((f) =>', repl: '...SUITE_FILES.slice(0, 8).map((f) =>',
+    expect: 'D3 node --test 跑 SUITE_FILES 派生的那九支' },
+  { id: 'S14', group: 'D3 套件', where: '壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天）', file: 'tools/playtest.mjs',
+    needle: "c.version === Number('${SHELL_VERSION}')", repl: "c.version === 1",
+    expect: 'D3 @boot 的壳层版本仍从 js/main.js 的常数派生' },
 ];
 
 const only = process.argv.slice(2);

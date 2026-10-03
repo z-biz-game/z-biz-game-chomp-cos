@@ -15,6 +15,8 @@
 //
 // Every scenario reports { rows, fail } in the same shape as tools/harness.mjs, so verify.sh
 // aggregates node suites and browser suites on one line.
+import { readFileSync } from 'node:fs';
+
 const PORT = process.env.CDP_PORT || 9361;
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5201/';
 const SHELL_TIMEOUT = Number(process.env.SHELL_TIMEOUT || 30000);
@@ -22,6 +24,15 @@ const ORIGIN = new URL(BASE).origin;
 const isOurs = (u) => typeof u === 'string' && u.startsWith(ORIGIN);
 const cmd = process.argv[2];
 const arg = process.argv[3];
+
+// The shell version is a fact about js/main.js, not a number worth copying into a scenario: when
+// VERSION went 1 → 2 with the save-shape bump, @boot stayed red for three days while the app was
+// fine. Read it out of the source, and refuse to guess if the line ever changes shape.
+const SHELL_VERSION = (() => {
+  const m = /const VERSION = (\d+);/.exec(readFileSync(new URL('../js/main.js', import.meta.url), 'utf8'));
+  if (!m) throw new Error('playtest: js/main.js 里找不到 `const VERSION = N;`，壳层版本无从核对');
+  return m[1];
+})();
 
 class CDP {
   constructor(ws) {
@@ -183,7 +194,7 @@ async function pointerScenario(cdp, sessionId, runJS) {
   };
   const S = () => runJS('JSON.stringify(window.chomp.state)');
 
-  await runJS('(() => { const c = window.chomp; c.store.reset(); c.load("#/lot/shoal-01"); return 1; })()');
+  await runJS('(() => { const c = window.chomp; if (!document.getElementById("tutorial").hidden) document.getElementById("tut-close").click(); c.store.reset(); c.load("#/lot/shoal-01"); return 1; })()');
   let fresh = null;
   for (let i = 0; i < 40; i++) {
     await sleep(80);
@@ -339,7 +350,24 @@ const SCENARIOS = {
     const rec = (name, pass, detail) => rows.push({ test: name, pass: !!pass, detail: detail === undefined ? null : JSON.parse(JSON.stringify(detail ?? null)) });
     window.__lastRows = rows;
     const c = window.chomp;
-    rec('the shell boots straight into a game', c && c.version === 1 && c.state.id && c.state.mode === 'campaign', c && c.state);
+    rec('the shell boots straight into a game', c && c.version === Number('${SHELL_VERSION}') && c.state.id && c.state.mode === 'campaign', c && c.state);
+    // 首启引导不是装饰：它拦住的那一层真的让棋盘不动。每一轮 verify.sh 都开一个全新的
+    // --user-data-dir，所以"第一次进来"就是这一腿的真实条件 —— 把它当契约钉住，而不是假设玩家
+    // 已经关过它（那正是 5f634d2 之后四套场景集体失明、而 @boot 依然全绿的原因）。
+    const D = (id) => document.getElementById(id);
+    rec('first run puts the rules card up and the board waits for it',
+      D('tutorial').hidden === false && c.state.paused === true, { hidden: D('tutorial').hidden, paused: c.state.paused });
+    const waitingBite = c.tap(0, 0);
+    rec('a bite offered while the rules are on screen is refused and bills nothing',
+      waitingBite.rejected === '已暂停' && c.state.plies === 0 && c.state.youBites === 0,
+      { rej: waitingBite, plies: c.state.plies, youBites: c.state.youBites });
+    D('tut-close').click(); await new Promise((r) => setTimeout(r, 140));
+    rec('closing the rules card hands the board back', D('tutorial').hidden === true && c.state.paused === false,
+      { hidden: D('tutorial').hidden, paused: c.state.paused });
+    const onDisk = JSON.parse(localStorage.getItem('chomp.save.v1') || 'null');
+    rec('the rules are pushed once per device: seenTutorial reached the save on disk',
+      c.store.settings.seenTutorial === true && !!(onDisk && onDisk.settings && onDisk.settings.seenTutorial === true),
+      { memory: c.store.settings.seenTutorial, disk: onDisk && onDisk.settings });
     const cv = document.getElementById('board');
     rec('the canvas has real pixels (not the 300x150 default)', cv.width > 0 && cv.height > 0 && !!cv.getContext('2d'), { w: cv.width, h: cv.height });
     rec('devicePixelRatio is honoured', cv.width >= cv.getBoundingClientRect().width, { dpr: c.view.metrics().dpr, w: cv.width, css: cv.getBoundingClientRect().width });
@@ -389,6 +417,7 @@ const SCENARIOS = {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const D = (id) => document.getElementById(id);
     const c = window.chomp;
+    if (!D('tutorial').hidden) { D('tut-close').click(); await sleep(140); }
     c.store.reset();
     c.load('#/lot/shoal-01'); await sleep(140);
     const lot = c.lot();
@@ -458,6 +487,7 @@ const SCENARIOS = {
     window.__lastRows = rows;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const c = window.chomp;
+    if (!document.getElementById('tutorial').hidden) { document.getElementById('tut-close').click(); await sleep(140); }
     c.store.reset();
 
     c.load('#/c/7'); await sleep(120);
@@ -510,6 +540,7 @@ const SCENARIOS = {
     const c = window.chomp;
     const KEY = 'chomp.save.v1';
 
+    if (!D('tutorial').hidden) { D('tut-close').click(); await sleep(140); }
     c.store.reset();
     c.load('#/lot/shoal-01'); await sleep(140);
     rec('a wiped save is empty', Object.keys(c.store.records).length === 0 && c.store.unlocked === 1 && localStorage.getItem(KEY) === null, { unlocked: c.store.unlocked });
@@ -518,7 +549,7 @@ const SCENARIOS = {
     const id = c.state.id;
     const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
     rec('the win reaches localStorage, not only memory', !!(raw && raw.records[id] && raw.records[id].won), raw && Object.keys(raw.records || {}));
-    rec('clearing an early lot unlocks the next', raw.unlocked >= 2, { unlocked: raw.unlocked });
+    rec('clearing an early lot unlocks the next', !!raw && raw.unlocked >= 2, { unlocked: raw && raw.unlocked });
 
     // best only goes DOWN: hand the store a worse and a better run directly.
     const g0 = c.state.plies;

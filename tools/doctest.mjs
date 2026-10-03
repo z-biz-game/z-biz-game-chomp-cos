@@ -309,11 +309,23 @@ eq(LOGIC_TOTAL, totalClaim, 'D3 九行之和 == README 写的那个总数');
 eq(LOGIC_TOTAL, MIN_LOGIC, 'D3 九行之和 == verify.sh 里的地板 MIN_LOGIC_ROWS（调低地板就是这条红）', `地板 ${MIN_LOGIC}`);
 eq(SUITE_FILES.length, 9, 'D3d test 目录下就是九套（少一个文件循环就少转一圈，这里点名）');
 ok(/九套 node 测试/.test(README) && /九套 node 套件/.test(README), 'D3 README 两处「九套」的措辞还在（改套件数必须同步改文档）', 'README 四 + 六');
-const nodeTest = spawnSync(process.execPath, ['--test', 'test/'], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
-const nt = /tests (\d+)[\s\S]*?pass (\d+)[\s\S]*?fail (\d+)/.exec(nodeTest.stdout || '');
-ok(!!nt && +nt[1] === 9 && +nt[2] === 9 && +nt[3] === 0, 'D3 node --test 现在交回 tests 9 / pass 9 / fail 0', nt ? nt.slice(1, 4).join('/') : '解析不到');
-const ntDoc = /ℹ tests (\d+) \/ ℹ pass (\d+) \/ ℹ fail (\d+)/.exec(README.replace(/\n/g, ' '));
-eq(ntDoc ? `${ntDoc[1]}/${ntDoc[2]}/${ntDoc[3]}` : '?', nt ? `${nt[1]}/${nt[2]}/${nt[3]}` : '?', 'D3 README 里那句 tests/pass/fail 读数与本轮真跑一致');
+const nodeTest = spawnSync(process.execPath, ['--test', ...SUITE_FILES.map((f) => `test/${f}`)], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
+// 聚合读数（tests/pass/fail）跟着 node 的版本漂：CI 的 v22 把 `--test test/` 当成一个条目跑，交回
+// tests 1 / fail 1，本机 v24 才把目录展开成九支文件。所以参数由 SUITE_FILES 派生，判定只取与版本
+// 无关的三件事（rc、每套交回的那一行 rows:、聚合 fail 0），tests 只作观测印在日志里。
+const ntOut = nodeTest.stdout || '';
+const ntRuns = (ntOut.match(/^rows: \d+ fail: 0$/gm) || []).length;
+const ntAgg = /tests (\d+)[\s\S]*?pass (\d+)[\s\S]*?fail (\d+)/.exec(ntOut);
+ok(nodeTest.status === 0 && ntRuns === SUITE_FILES.length && !!ntAgg && +ntAgg[3] === 0,
+  'D3 node --test 跑 SUITE_FILES 派生的那九支：rc 0、每套各交回一行 rows:、聚合 fail 0',
+  `node ${process.version} · rc=${nodeTest.status} · rows 行 ${ntRuns}/${SUITE_FILES.length} · 观测聚合 ${ntAgg ? ntAgg.slice(1, 4).join('/') : '解析不到'}`);
+// 壳层版本号是 js/main.js 里的一个常数，不是抄进场景的字面量：VERSION 从 1 抬到 2 那一次，
+// @boot 写死的 `c.version === 1` 红了三天而应用无恙。这里钉的就是「它仍由源码派生」。
+const mainVersion = Number((read('js/main.js').match(/const VERSION = (\d+);/) || [])[1]);
+ok(Number.isFinite(mainVersion) && /const VERSION = \(\\d\+\);/.test(PT) && /c\.version === Number\('\$\{SHELL_VERSION\}'\)/.test(PT)
+  && !/c\.version === \d/.test(PT),
+  'D3 @boot 的壳层版本仍从 js/main.js 的常数派生（写死一个字面量就是这条红）',
+  `main.js VERSION=${mainVersion} · playtest 读它=${/const VERSION = \(\\d\+\);/.test(PT)} · 场景里还留着写死的数字=${/c\.version === \d/.test(PT)}`);
 eq(suiteFailTotal, 0, 'D3 九套本轮 0 失败');
 const HARNESS_ROWS_LINE = lineOf('tools/harness.mjs', /console\.log\(`rows: \$\{rows\.length\} fail/);
 const HARNESS_EXIT_LINE = lineOf('tools/harness.mjs', /process\.exit\(bad\.length/);
@@ -449,7 +461,7 @@ const CITES = [
   ['js/core/anim.js', /a\.accumulator \+= elapsed/, 'js/core/anim.js:79'],
   ['js/main.js', /function routeTo/, 'js/main.js:46-65'],
   ['js/main.js', /location\.hash = `#\/random/, 'js/main.js:61'],
-  ['js/main.js', /node --test test\//, 'js/main.js:125'],
+  ['js/main.js', /npm run unit 复算这些数/, 'js/main.js:125'],
   ['js/main.js', /const par = Math\.max\(1, Math\.ceil\(Math\.log2\(lot\.cells\)\)\)/, 'js/main.js:161'],
   ['index.html', /name="description"/, 'index.html:8'],
   ['index.html', /class="legend"/, 'index.html:81'],
@@ -459,14 +471,14 @@ const CITES = [
   ['package.json', /"dependencies": \{\}/, 'package.json:32-33'],
   ['electron/main.cjs', /startServer\(\{ port: 0 \}\)/, 'electron/main.cjs:7-8'],
   ['assets/gen/make_art.py', /def png_dims/, 'assets/gen/make_art.py:383'],
-  ['tools/playtest.mjs', /process\.env\.CDP_PORT \|\| 9361/, 'tools/playtest.mjs:18'],
-  ['tools/playtest.mjs', /const ORIGIN = new URL\(BASE\)\.origin/, 'tools/playtest.mjs:21-22'],
-  ['tools/playtest.mjs', /async function pointerScenario/, 'tools/playtest.mjs:169-333'],
-  ['tools/playtest.mjs', /stars: await runJS/, 'tools/playtest.mjs:233'],
-  ['tools/playtest.mjs', /const SCENARIOS = \{/, 'tools/playtest.mjs:336'],
-  ['tools/playtest.mjs', /the canvas has real pixels/, 'tools/playtest.mjs:344-353'],
-  ['tools/playtest.mjs', /getEntriesByType\('resource'\)/, 'tools/playtest.mjs:370-381'],
-  ['tools/playtest.mjs', /结束后真点击一律不计数/, 'tools/playtest.mjs:327-330'],
+  ['tools/playtest.mjs', /process\.env\.CDP_PORT \|\| 9361/, 'tools/playtest.mjs:20'],
+  ['tools/playtest.mjs', /const ORIGIN = new URL\(BASE\)\.origin/, 'tools/playtest.mjs:23-24'],
+  ['tools/playtest.mjs', /async function pointerScenario/, 'tools/playtest.mjs:180-344'],
+  ['tools/playtest.mjs', /stars: await runJS/, 'tools/playtest.mjs:244'],
+  ['tools/playtest.mjs', /const SCENARIOS = \{/, 'tools/playtest.mjs:347'],
+  ['tools/playtest.mjs', /the canvas has real pixels/, 'tools/playtest.mjs:372-381'],
+  ['tools/playtest.mjs', /getEntriesByType\('resource'\)/, 'tools/playtest.mjs:398-409'],
+  ['tools/playtest.mjs', /结束后真点击一律不计数/, 'tools/playtest.mjs:338-341'],
   ['tools/harness.mjs', /export function test\(/, 'tools/harness.mjs:12-21'],
   ['tools/verify.sh', /CDP_PORT=\$\{CDP_PORT:-9361\}/, 'tools/verify.sh:23'],
   ['tools/verify.sh', /---- pre-flight/, 'tools/verify.sh:100'],
@@ -475,7 +487,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:676'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:694'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
@@ -542,6 +554,10 @@ ok(README.includes('chomp-lots-v1') && SCHEMA === 'chomp-lots-v1', 'D7 发货棋
 ok(README.includes('2026-09-27T10:19:32.740Z') && BAKED_AT === '2026-09-27T10:19:32.740Z', 'D7 BAKED_AT 文档抄的就是 lots.js 里那个时间戳', BAKED_AT);
 ok(/SIM_STEP=1\/120/.test(README) && /export const SIM_STEP = 1 \/ 120/.test(read('js/core/anim.js')), 'D7 anim 的 SIM_STEP 文档写 1/120 == 源码', 'anim.js:12');
 ok(/MAX_STEPS=20/.test(README) && /export const MAX_STEPS = 20/.test(read('js/core/anim.js')), 'D7 anim 的 MAX_STEPS 文档写 20 == 源码', 'anim.js:13');
+// 证明抽屉末尾那一行印给玩家的是**命令**而不是数字：本轮就是因为它留着一句在 CI 的 node 22 上必红的
+// `node --test test/` 才换成 `npm run unit`。同一句话住在两处（页面与文档），所以逐字比而不但比文档。
+ok(/npm run unit 复算这些数/.test(README) && /npm run unit 复算这些数/.test(read('js/main.js')),
+  'D7 证明抽屉末尾那句复现命令：文档抄的与 js/main.js 印给玩家的逐字同一句', `main.js:${lineOf('js/main.js', /npm run unit 复算这些数/)}`);
 const fileFacts = [
   ['manifest.webmanifest', /（27 行 \/ 1,440 B）/, 27, 1440],
   ['sw.js', /同名带版本缓存 chomp-cos-v2（92 行）/, 92, null],
@@ -549,7 +565,8 @@ const fileFacts = [
   ['css/game.css', /样式（183 行 \/ 8,203 B）/, 183, 8203],
   ['js/core/anim.js', /固定步长模拟（150 行）/, 150, null],
   ['assets/gen/make_art.py', /（448 行 \/ 19,039 B/, 448, 19039],
-  ['tools/playtest.mjs', /（561 行 \/ 35,652 B）/, 561, 35652],
+  ['tools/playtest.mjs', /（592 行 \/ 38,193 B）/, 592, 38193],
+  ['tools/sabotage.mjs', /（232 行）/, 232, null],
   ['js/data/lots.js', /（本轮实测 15,266 B/, null, 15266],
 ];
 for (const [f, re, wantL, wantB] of fileFacts) {
@@ -626,6 +643,7 @@ const UNPINNED = [
   ['deliverable 那句浏览器跑了 3 次的诚实说明', 'deliverable.md', /`tools\/verify\.sh` 跑了 3 次/],
   ['README 一 的机器规格（Darwin／核数／node 版本）', 'README.md', /机器 Darwin [\d.]+ \w+、\d+ 核、node v[\d.]+/],
   ['README 七.1 那一轮 verify.sh 被自己的预检拒了（rc=8 与那台孤儿 Chrome）', 'README.md', /`rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=\d+`/],
+  ['README 四 末段那一轮浏览器腿的逐套实测读数（跑过才写得出来，闸不复跑 Chrome 所以不重言）', 'README.md', /@boot 21 \/ @play 20 \/ @routes 17 \/ @save 12 \/ @pointer 21`\n（本机 2026-10-03/],
   ['README 一 anim 那一格的变异体读数（要临时改文件才能复现）', 'README.md', /本轮实测红 2 行：`\[136,136,136\]` 与 `2 ≠ 20`/],
   ['README 一 anim 那一格的「假红目标」读数（六行全绿）', 'README.md', /则六行全绿/],
   ['README 里「本轮之前是八行 165」这句历史说明', 'README.md', /本轮之前是八行 165/],
@@ -637,7 +655,7 @@ const UNPINNED = [
 ];
 for (const [what, file, re] of UNPINNED) ok(re.test(DOCS[file]), 'D10 unpinned 清单里的那句话还在文档里', `${file} · ${what}`);
 ok(UNPINNED.length >= 14, 'D10a unpinned 清单登记了不少于 14 处墙钟与一次性读数', `${UNPINNED.length} 处`);
-ok(/不承诺浏览器闸本轮被复验/.test(README), 'D10b README 那条「不承诺浏览器闸本轮被复验」还在（浏览器腿本轮没跑，别让下轮写成跑过）', 'README 七.1');
+ok(/不承诺浏览器闸在每个回合都复跑得到/.test(README), 'D10b README 七.1 仍写着浏览器读数**是带日期的一次观测**（一次绿不等于每轮绿）', 'README 七.1');
 
 // ================================================================ D11 破坏试验台账 == sabotage.mjs
 const SAB = read('tools/sabotage.mjs');
@@ -673,7 +691,7 @@ const promiseRow = (README.match(/\| `node tools\/doctest\.mjs`[^\n]*?`rows: (\d
 ok(!!promiseRow && +promiseRow === FINAL, 'D12c README 承诺表里这道闸自报的 rows 等于本次实际条数', `文档 ${promiseRow || '（解析不到）'} vs 本次 ${FINAL}`);
 // 自数钉（组织纪律：闸不许靠「少一条断言」变绿）。这一条的比较同样发生在自增之前，
 // 所以常量等于**印出来的总条数**，含这一条自己。verify.sh 再用 DOCTEST_ROWS_WANT 复钉一次。
-const EXPECT_ROWS = 356;
+const EXPECT_ROWS = 367;
 ok(rows + 1 === EXPECT_ROWS, 'D12d 本闸条数 == 文件里钉死的 EXPECT_ROWS（少一条断言就红，含这一条自己）', `EXPECT_ROWS=${EXPECT_ROWS} / 印出来的 rows 必须是它`);
 
 console.log(`\n合计 ${rows} 项，${fail.length} 项失败`);

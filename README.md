@@ -38,9 +38,9 @@
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a`。**本机没有 Pillow**（`python3 -c "import PIL"` 报 ModuleNotFoundError），所以这条 `python3` 命令本轮跑不起来 —— 这一格的四项读数与指纹是 `node tools/doctest.mjs` 的 D7 组在 node 里读 IHDR 现量交回的（读 `make_art.py` 的期望表 + 对 `assets/` 逐张 sha256），不是引用旧文档；把这条命令补成能跑不在本轮的可动范围里，写在这里是缺陷而不是省略 | 应存在 18 张 / 缺失 0 / 0字节 0 / 边长≥180 9 张，指纹 `sha256[:12] = 3f8bac3be94a` |
 | 32 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **32 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
-| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 356 fail: 0` |
-| 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十二把刀，一组一把，每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
-| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮**被它自己的预检拒了**，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | 本轮**零条浏览器读数**：`rc=8`，五套场景一条都没执行 |
+| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 367 fail: 0` |
+| 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
+| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-03 跑绿；**原样**跑在这台有兄弟 agent 的机器上仍会被它自己的预检拒，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
 
 一条命令跑全部 node 侧：
 
@@ -67,15 +67,17 @@ rows: 15 fail: 0     # storage
 `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171）是逻辑腿的地板，交回的条数低于它就 `FAILED=1`，
 所以「少跑一套」「某套少写一半断言」都会红，而不是安静地少几条；`node tools/doctest.mjs` 的 D3 组
 再把每一套自己交回的 `rows: N fail: M` 与这张表**逐套**比一次（改一套的条数而不改文档就是红），
-D12 组再把这道闸自己这一次的条数钉住：**本次实发 356 项**，与它自己最后那行 `rows: 356` 必须是同一个数，
+D12 组再把这道闸自己这一次的条数钉住：**本次实发 367 项**，与它自己最后那行 `rows: 367` 必须是同一个数，
 `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT` 又把这个数复钉一遍 —— 三处任一处对不上就红。
 仓里印这个总数的命令就是文档闸自己（`npm run doctest`，`tools/verify.sh:64` 派生它的那一行）。
 值得一提：那八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
-是由 `node --test test/` 那份带文件名的输出确认的（`✔ test/anchor.test.mjs` 紧跟它的 `rows: 43`，
+是由 `node --test` 那份带文件名的输出确认的（`✔ test/anchor.test.mjs` 紧跟它的 `rows: 43`，
 往下 anim 6 / book 13 / game 23 / library 17 / model 25 / rng 13 / solve 16 / storage 15）。
-`node --test test/` 这条写法（`README` 旧版与
-`js/main.js:125` 都提到）本轮也复跑过，结论行是 `ℹ tests 9 / ℹ pass 9 / ℹ fail 0`
-—— 注意那个 `tests 9` 数的是**文件数**，不是断言数，九行 `rows:` 与上表逐字相同。
+跑法是 `node --test` 后面接**由 `test/` 目录派生的那九支文件名**，不是 `--test test/`。这里刻意
+**不钉聚合读数**：`ℹ tests N` 那个数跟着 node 的版本漂 —— 同一棵树，本机 v24 把 `--test test/` 展开成
+九支文件（`tests 9 / pass 9 / fail 0`），CI 的 v22 却把它当一个条目跑（`tests 1 / pass 0 / fail 1`），
+钉住它等于把闸交给运行时版本。D3 判的是与版本无关的三件事：rc 0、九套各交回一行 `rows: … fail: 0`、
+聚合 `fail 0`；`tests` 读数只作为观测印在当轮日志的行尾，不进本文（§一 那条墙钟纪律的同一种处理）。
 
 ---
 
@@ -89,8 +91,8 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 356 项**�
 | `npm test` | `npm run check && npm run unit && npm run doctest`（`package.json:14`） | **跑过**，见 §一 与下面两道新闸 |
 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 32 个文件 | **跑过**，`OK` |
 | `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
-| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 356 fail: 0` |
-| `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十二把刀各打一份临时副本 | **跑过**，台账见 §四 |
+| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 367 fail: 0` |
+| `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十四把刀各打一份临时副本 | **跑过**，台账见 §四 |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:60`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
 | `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 九套 + 文档闸 + 破坏试验台账 + 真 Chrome 五场景 | 本轮逻辑腿跑过（`LOGIC_ONLY=1`），浏览器腿见 §七第 1 条 |
@@ -113,7 +115,7 @@ UI 里没有任何第二套「合法」的定义。
 | 1 | 局面是一张**非增**的行长向量 `[s0>=s1>=…>=1]`，`(0,0)` 是毒格 | `js/core/shapes.js:5-13`（口径写在文件头）、校验器 `js/core/shapes.js:50-63`（`validateShape`） | `第 1 行长度 3 大于上一行 2：序理想不允许悬空的格子`、`shape 为空（毒格也已被咬掉，不是可行动的局面）`（`js/core/shapes.js:52,59`） |
 | 2 | 一口咬掉 `(r,c)` 连同**所有 `r'>=r` 且 `c'>=c`** 的格子；上面的行原样，下面的行被裁到 `c` 列，裁成 0 的行整行消失 | `js/core/shapes.js:143-153`（`applyBite`），几何侧 `js/view.js:476-483`（`goneSquares`） | `applyBite([4,4],[0,2]) = [2,2]`、`applyBite([5,4,3],[2,0]) = [5,4]` 都是断言在 `test/model.test.mjs:140-147` |
 | 3 | **毒格不能主动咬**：`(0,0)` 永远不在合法口里；但 `(r>=1, 0)` 是合法的（它只削掉下面几行的第一列） | `js/core/shapes.js:104-114`（`legalBites`；列起点那一行是 `js/core/shapes.js:111`，上面 110-111 的注释就在说这件事）、`js/core/shapes.js:116-124`（`isLegalBite`） | `毒格不能主动咬` / 只剩毒格时 `只剩毒格：咬下去即输`（同一行的三元式，`js/core/shapes.js:133`），`biteReason` 六句拒绝各钉一条（`test/model.test.mjs:124-132` 逐句 `eq`） |
-| 4 | **被迫咬到毒格的人输**：交出 `[1]` 的那一瞬间比赛就结束了 —— 造出 `[1]` 的人赢，接手的人输 | `js/core/game.js:101`（`isTerminal(next) → finish`）、终局约定写在 `js/core/game.js:6-11` | 结束后任何一口 `rejected='本局已结束'`，状态一格不动（`test/game.test.mjs:193-201`）；被 `@pointer` 用真鼠标复验（`tools/playtest.mjs:327-330`） |
+| 4 | **被迫咬到毒格的人输**：交出 `[1]` 的那一瞬间比赛就结束了 —— 造出 `[1]` 的人赢，接手的人输 | `js/core/game.js:101`（`isTerminal(next) → finish`）、终局约定写在 `js/core/game.js:6-11` | 结束后任何一口 `rejected='本局已结束'`，状态一格不动（`test/game.test.mjs:193-201`）；被 `@pointer` 用真鼠标复验（`tools/playtest.mjs:338-341`） |
 | 5 | 只剩毒格时**主动**点毒格是认输，不是空转：这一步 `rejected=null`，直接判负 | `js/core/game.js:80-88` 的 `forced` 分支 | `test/game.test.mjs:203-212` |
 
 除上面这几条之外没有别的约束：**没有平局** —— 状态机只有 `playing | won | lost` 三态
@@ -137,22 +139,26 @@ UI 里没有任何第二套「合法」的定义。
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
 | `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
-| `tools/doctest.mjs`（684 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 356 fail: 0`（本次实发 356 项，见 §一） |
+| `tools/doctest.mjs`（702 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 367 fail: 0`（本次实发 367 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
-| `tools/playtest.mjs`（561 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
-| `tools/sabotage.mjs`（226 行） | **破坏试验台账**：十二把刀，一组一把，每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
+| `tools/playtest.mjs`（592 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:180-344`，注释在 177-179 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
+| `tools/sabotage.mjs`（232 行） | **破坏试验台账**：十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
 | `tools/verify.sh`（236 行） | 生命周期 + 两条腿的**计数复钉**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性。逻辑腿自己判三件事：`MIN_LOGIC_ROWS` 地板（`tools/verify.sh:31`）、文档闸的条数复钉 `DOCTEST_ROWS_WANT`（`tools/verify.sh:34`）、台账的刀数复钉 `SABOTAGE_KNIVES_WANT`（`tools/verify.sh:38`），两道新闸各只派生一次（`tools/verify.sh:64`、`tools/verify.sh:81`）；
 浏览器判据本身仍然只有「有没有 fail 行」 | 本轮逻辑腿跑过；浏览器腿见 §七第 1 条 |
 
 五套浏览器场景的**条数**：`tools/verify.sh:200` 只打印 `rows: len(rows)` 并判 `fail`，**没有任何一处写着期望条数**。
-所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 17、`@play` 20、`@save` 12、`@routes` 14 个调用点
+所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 21、`@play` 20、`@save` 12、`@routes` 14 个调用点
 （其中一套在 `for (const tier of …)` 四档循环里 ⇒ 正常路径 17 行）、`@pointer` 25 个调用点
 （两条是循环内「走不通才报」的失败行、两对是 `if/else` 二选一 ⇒ 正常路径 21 行），
-合计**正常路径 87 行**。与 `deliverable.md:17,112-116` 记录的 2026-09-27 那一次
-`@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21` 相比，只有 `@boot` 从 15 变 17：
+合计**正常路径 91 行**。与 `deliverable.md:17,112-116` 记录的 2026-09-27 那一次
+`@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21` 相比只有 `@boot` 动了，15 → 21 分两跳：
 本轮发货了真位图，旧的「一个图片请求都不许有 + favicon 必须是内联 SVG」两行与新事实矛盾，
-被换成了四行新契约（见 §六）。其余四套逐场景仍然对得上。
-但请注意那是**别人那一次的读数 + 本轮的静态点数**，两者都不是本轮实测。
+被换成四行新契约（见 §六，15 → 17）；`5f634d2` 让首访先立规则卡，于是补了四行首访契约
+（卡在、卡在前递口被拒且不计费、关掉卡把盘交回来、`seenTutorial` 落进盘上那份档，17 → 21）。
+其余四套逐场景仍然对得上。
+静态点数本轮**被真跑对上了**：浏览器腿交回 `@boot 21 / @play 20 / @routes 17 / @save 12 / @pointer 21`
+（本机 2026-10-03 的一次观测，`bash tools/verify.sh` → `=== ALL GREEN ===`，console 干净）。
+`@routes` 那 14 → 17、`@pointer` 那 25 → 21 是上面说好的循环与分支差，另外三套调用点数与行数一字不差。
 
 `test/` 九套的条数是本轮实测交回的（§一那张表），逐套内容：
 `anchor 43`（外部锚点）、`book 13`（棋书完整性 + 范围守卫 + 完美性普查 419 全覆盖）、
@@ -160,15 +166,15 @@ UI 里没有任何第二套「合法」的定义。
 `model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
 
 
-### 破坏试验台账（12 把刀）
+### 破坏试验台账（14 把刀）
 
-一份全绿的文档闸只说明「这一轮文档与代码对得上」，它没有说明**闸会不会红**。所以十二组各配一把刀，
+一份全绿的文档闸只说明「这一轮文档与代码对得上」，它没有说明**闸会不会红**。所以十二组各配一把刀（D3 两把），
 每把只做一个最小扰动，而且只落在 workspace 里的**临时副本**上（`rsync -a --exclude .git` 一份树，
 跑完即删；仓里的文件一个字都不动，落刀前后各比一次 `git status`，还要按字节比回落刀前存的那份）。
 一把算过的条件是 **rc≠0 并且输出里有一条 FAIL 行同时点名那一组和那一条断言**——换个说法不算点名。
 针必须在目标文件的**台账行之外**恰好命中一次（命中 0 次或多次都是 ERROR 并停）；工作树脏就直接拒
 （rc 2），所以台账只在提交之后跑。末列那个 rc 由 `tools/sabotage.mjs` 自己从子进程读回来写进这张表，
-人不许抄；十二把都红过之后它再拿一份**不带刀**的整副本复跑同一条命令，必须 rc=0（对照），
+人不许抄；十四把都红过之后它再拿一份**不带刀**的整副本复跑同一条命令，必须 rc=0（对照），
 证明红是那一个扰动造成的而不是环境。`tools/verify.sh:38` 复钉刀数：少一把就是红，不是快一轮。
 
 | 刀 | 这一刀模拟的是 | 打哪个文件 | 针（台账行之外唯一命中） | 改成 | 必须点名的那条断言 | 实测 rc |
@@ -180,11 +186,13 @@ UI 里没有任何第二套「合法」的定义。
 | S5 | 发货合计被改了一个位（340 → 341） | `README.md` | `合计 **340 个合法首口` | `合计 **341 个合法首口` | D5 32 关 / 340 合法首口 / 44 胜口 / 296 错误首口 / 372 格 == 发货文件逐行加总 | 1 |
 | S6 | 代码上面加了一行，文档的行号引用没跟着改 | `README.md` | `js/core/shapes.js:20-22` | `js/core/shapes.js:20-21` | D6 文档引用的那一行号仍指回原来那段代码 | 1 |
 | S7 | 文档抄的存储键名与源码不同串了 | `README.md` | `只有一个 localStorage 键 `chomp.save.v1`` | `只有一个 localStorage 键 `chomp.save.v2`` | D7 存档键名文档与源码同串 | 1 |
-| S8 | 场景调用点的静态计数被改了一个（17 → 18） | `README.md` | `boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | `boot 18 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | D8 场景的 rec() 调用点数 == 文档写的数 | 1 |
+| S8 | 场景调用点的静态计数被改了一个（21 → 22） | `README.md` | `boot 21 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | `boot 22 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | D8 场景的 rec() 调用点数 == 文档写的数 | 1 |
 | S9 | 毫秒读数被摘掉了出处（"出处见 §6"没了） | `DESIGN.md` | `耗时 0.03 s——那是读数，出处见 §6 计时量` | `耗时 0.03 s` | D9 DESIGN 前三节里每一处 0.0x s 读数都挂着「出处见 §6」 | 1 |
 | S10 | 钉不住的那句话被从文档里删掉了 | `README.md` | `机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。` | `''` | D10 unpinned 清单里的那句话还在文档里 | 1 |
 | S11 | 刀被改名，台账与刀谱不再是同一批 | `tools/sabotage.mjs` | `  { id: 'S6',` | `  { id: 'S6x',` | D11a README 台账的把数与 sabotage.mjs 的刀数相同 | 1 |
 | S12 | 闸自己的组数地板被调低（12 → 11） | `tools/doctest.mjs` | `emitted.size === 12` | `emitted.size === 11` | D12a 这道闸自己是十二组 | 1 |
+| S13 | `node --test` 少派生一套（九支文件名被削成八支） | `tools/doctest.mjs` | `...SUITE_FILES.map((f) =>` | `...SUITE_FILES.slice(0, 8).map((f) =>` | D3 node --test 跑 SUITE_FILES 派生的那九支 | ? |
+| S14 | 壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天） | `tools/playtest.mjs` | `c.version === Number('${SHELL_VERSION}')` | `c.version === 1` | D3 @boot 的壳层版本仍从 js/main.js 的常数派生 | ? |
 
 ---
 
@@ -199,6 +207,12 @@ UI 里没有任何第二套「合法」的定义。
 | `首口 k 个` | 同一张表里「咬完之后判为 P」的合法口数（`js/core/book.js:104-118`） | `node test/book.test.mjs` 把 `k` 与 `winningMoves` 对独立求解逐关比 |
 | `随机一口赢率 = k / legal` | 上面那个数直接除（`js/core/book.js:114`），发货存 6 位小数、复核时两边落到同一个 6 位网格（`js/core/library.js:75,100-102`） | `node test/library.test.mjs` 的 `chance` 篡改负例 |
 | `局面数（本关表）` | 该关可达集大小 = 非空子序理想数（`js/core/solve.js:261-275`） | `node test/solve.test.mjs` 要求「闭包 BFS」「序理想计数」「矩形闭式 `C(r+w,r)-1`」三个数对同一形状相等 |
+
+那四行字由证明抽屉末尾的 `el.proofmore` 收尾，它印给玩家的是**复现命令本身**而不是第五个数字：
+「复现：node tools/bake.mjs 重烘并重验；npm run unit 复算这些数。」（`js/main.js:125`）。这句话住在页面上，
+所以它也是一条会被 D7 逐字比的文案 —— 它曾经是 `node --test test/`，而那条命令在 CI 的 node 22 上会把
+九套塌成一条失败项（§一 那一整段说的就是这件事），印在屏幕上等于对玩家说谎，故换成 `npm run unit`。
+另外提醒：`node tools/bake.mjs` 会**覆写 `js/data/lots.js`**（`tools/bake.mjs:221`），所以它不是一条只读复跑。
 
 **宇宙**是 4 行 / 10 列 / 18 格以内的一切合法巧克力条（`js/core/shapes.js:20-22`），
 本轮只读复测：`solveUniverse()` 交出 **419 个局面、36 个 P、383 个 N**，
@@ -253,7 +267,7 @@ UI 里没有任何第二套「合法」的定义。
 **唯一一处不在博弈论口径上的屏幕数字**：结算卡片上的星星。
 `par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`（`js/main.js:161`）是一个纯几何式，
 不是表里的量，也没有任何一条断言读它的值（`@pointer` 只把 `stars.textContent` 当 detail 打印，
-`tools/playtest.mjs:233`）。见 §七。
+`tools/playtest.mjs:244`）。见 §七。
 
 ---
 
@@ -294,7 +308,7 @@ server.cjs                 零依赖静态服务（5201，root 形态）；Commo
 electron/main.cjs          桌面壳（34 行，port 0 自挑）；`electron` 未列为依赖，故本机跑不起来
 tools/harness.mjs          微型框架（node 与浏览器同形输出）
 tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
-tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（561 行 / 35,652 B）
+tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（592 行 / 38,193 B）
 tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
 test/*.test.mjs            九套 node 套件（anchor anim book game library model rng solve storage）
 test/fixture.mjs           手算期望值（12 条 fixture + 两行阶梯 + 单行向量），被 anchor/solve 引用
@@ -314,24 +328,30 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 "一个图片请求都不许有、favicon 必须是内联 `data:image/svg+xml`"，那是**没有美术的口径**；
 现在钉的是新口径 —— 每个位图请求都必须是同源 `/assets/` 下的 `.png`、一个 webfont/音频/SVG
 光栅请求都不许有、三处 icon `<link>` 都指向盘上真 PNG 且含 180px 那张、四张贴图在页面里
-必须报 `ready` 而不是退回程序绘制（`tools/playtest.mjs:370-381`，本轮**未跑**，见 §七第 1 条）。
+必须报 `ready` 而不是退回程序绘制（`tools/playtest.mjs:398-409`，本机 2026-10-03 那次跑绿，见 §四 末段与 §七第 1 条）。
 
 ---
 
 ## 七、这个仓**不承诺**什么
 
-1. **不承诺浏览器闸本轮被复验。** 本轮**试过** `bash tools/verify.sh`，它以自己的预检拒绝开工：
+1. **不承诺浏览器闸在每个回合都复跑得到。** 本机 2026-10-03 那一次是绿的：五套场景 91 行、
+   `=== ALL GREEN ===`、console 干净（逐套读数在 §四 末段）。但那是**一次带日期的观测**，
+   不是一条每轮都成立的承诺 —— 同一台机器上**原样**跑 `bash tools/verify.sh` 会被自己的预检拒绝开工：
    `rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=9373` 的 headless Chrome
    （`--user-data-dir=/tmp/sky-chrome-profile`，**不是本仓的**），并且**一个子进程都没派生** ——
    跑完之后 `:5201` 与 `:9361` 上仍然没人听。这一条就是 §八 那句「占号就当红，不借用」的实现证据。
-   台架纪律写在 `DESIGN.md` 第十节，预检本身在 `tools/verify.sh:100` 起（`exit 6/7/8` 三种抢口各一种）。
-   所以 §一最后一行与 §四那五套条数**没有本轮实测**：它们分别是「源码里 `rec()` 调用点的静态计数」
-   （本轮重数过一遍：boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点，
-   按 `tools/playtest.mjs:336` 起的场景分段数的）与
-   `deliverable.md:112-116` 记录的 2026-09-27 读数。两者互相吻合，但吻合不等于本轮跑绿过。
+   那一次绿是显式给了 `ALLOW_ORPHAN_CHROME=1 CDP_PORT=9361`（先确认 9361 与 5201 没人听）才开工的，
+   预检本身一个字都没放宽：台架纪律写在 `DESIGN.md` 第十节，预检在 `tools/verify.sh:100` 起
+   （`exit 6/7/8` 三种抢口各一种）。
+   每轮都复跑得到的只有 node 侧（D3 那九套真跑）与 §四 的静态调用点计数
+   （boot 21 / play 20 / routes 14 / save 12 / pointer 25 个调用点，按 `tools/playtest.mjs:347`
+   起的场景分段数的，D8 把它与文档逐字比）。本轮两者恰好对上了；**上一轮对不上**：
+   `5f634d2` 把壳层版本抬到 2 却留下场景里写死的 `c.version === 1`，`@boot` 因此连红三天，
+   而首访规则卡让后四套场景的每一口都被「已暂停」拒掉 —— 这两处现在各有一条断言与一把刀盯着
+   （D3 那两行 + S13/S14），浏览器腿的读数才第一次可信。
 2. **不承诺「断言的内容有意义」，只承诺「条数少不掉」。** 条数这一半本轮已经钉上了三层：
    `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171，就是九套真跑交回的条数之和，文档闸的 D3
-   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:676` 的 `EXPECT_ROWS` 与
+   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:694` 的 `EXPECT_ROWS` 与
    `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT`（两道把闸自己的条数钉死，少发一条断言就红，
    含那条自数）、`tools/verify.sh:38` 的 `SABOTAGE_KNIVES_WANT`（刀被删一把就是 verify 红）。
    「少跑一套」也红：文档闸 D3d 断言 `test/` 下恰好九个文件，且九行逐套 `rows:` 要与 §一 承诺表一致。
@@ -382,7 +402,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
     主代理 2026-09-27 抓到的 `/` 200 / 4,091 B 等读数（与本仓 `index.html` 的实测字节一致），
     但那是**别人的那一次**，本轮没有做网络复核，本文也没有把任何 URL 写成仓内事实。
 12. **不承诺界面对手感与美术。** 浏览器闸只认三类证据：DOM 矩形/文本、画布像素采样、真指针事件读数。
-    `.hidden`、类名、注释里的意图一概不算证据（`tools/playtest.mjs:344-353` 用像素采样判断「巧克力真的画出来了」，
+    `.hidden`、类名、注释里的意图一概不算证据（`tools/playtest.mjs:372-381` 用像素采样判断「巧克力真的画出来了」，
     用 `getBoundingClientRect` 判断控件存在，别的一律不读）。
 13. **发货的棋书就是答案表，这是故意的。** `pages.yml` 会连 `js/data/lots.js` 一起发出去，
     因为页面要靠它实时印「当前判定」。任何人 `F12` 读 419 行里的 `1/0` 就能知道每一口之后是胜是败。
@@ -393,7 +413,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 ## 八、端口与 URL 形态
 
 三个号写死在源码里：**web 5201**（`server.cjs:49,60`、`tools/verify.sh:24`、`package.json:9`）、
-**CDP 9361**（`tools/verify.sh:23`、`tools/playtest.mjs:18`）、以及 `verify.sh` 自己那一串退出码
+**CDP 9361**（`tools/verify.sh:23`、`tools/playtest.mjs:20`）、以及 `verify.sh` 自己那一串退出码
 （`2` 找不到 Chrome / `3` devtools 没绑上 / `4` 静态服务没答 / `5` `window.chomp` 始终没出现 /
 `6` `9361` 已被别的孤儿 Chrome 占 / `7` `5201` 已被占 / `8` 机器上还有别的带 remote-debugging-port 的
 headless Chrome）。占号就当红，不借用：借来的端口会发出另一个应用的 `index.html`，
@@ -406,7 +426,7 @@ URL 形态：**浏览器闸默认只跑一种** —— root 形态 `http://127.0
 （`tools/verify.sh:25` 的 `BASE=${BASE_URL:-http://127.0.0.1:$WEB_PORT/}`）。
 `BASE_URL` 可以整体替换（对着线上那一跑读同一个闸），但要注意两件事：脚本在 `BASE_URL` 被覆盖时
 **仍然会另起本地 `server.cjs`**（`tools/verify.sh:133` 无条件执行），而就绪轮询与页面都打在 `$BASE` 上；
-`tools/playtest.mjs:21-22` 的 `isOurs` 只按 `new URL(BASE).origin` 匹配页签。
+`tools/playtest.mjs:23-24` 的 `isOurs` 只按 `new URL(BASE).origin` 匹配页签。
 **本仓没有第二形态**：没有 Pages 前缀那个端口，也没有 `SHAPES=root|prefix|mobile` 那种多腿循环
 （那是同族另两个仓的东西，本仓 `tools/verify.sh` 里 grep 不到 `SHAPES`，也 grep 不到任何
 「每场景该交回几条断言」的 need 列表）。路由是 hash 段的四种，与 `js/main.js:46-65` 逐条对应：

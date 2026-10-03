@@ -122,7 +122,7 @@ function readout() {
     `两行情形的公开刻画：必败局恰好是阶梯 <code>(k, k-1)</code> —— 本关形状 ${encodeShape(lot.shape)} 落在这条线${lot.shape.length === 2 && lot.shape[0] === lot.shape[1] + 1 ? '上' : '外'}`,
   ];
   el.proof.innerHTML = proof.map((p) => `<li>${p}</li>`).join('');
-  el.proofmore.textContent = `复现：node tools/bake.mjs 重烘并重验；node --test test/ 复算这些数。`;
+  el.proofmore.textContent = `复现：node tools/bake.mjs 重烘并重验；npm run unit 复算这些数。`;
 }
 
 function totals() {
