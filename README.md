@@ -140,7 +140,7 @@ UI 里没有任何第二套「合法」的定义。
 | `tools/doctest.mjs`（684 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 356 fail: 0`（本次实发 356 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/playtest.mjs`（561 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:169-333`，注释在 166-168 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
-| `tools/sabotage.mjs`（225 行） | **破坏试验台账**：十二把刀，一组一把，每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
+| `tools/sabotage.mjs`（226 行） | **破坏试验台账**：十二把刀，一组一把，每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
 | `tools/verify.sh`（236 行） | 生命周期 + 两条腿的**计数复钉**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性。逻辑腿自己判三件事：`MIN_LOGIC_ROWS` 地板（`tools/verify.sh:31`）、文档闸的条数复钉 `DOCTEST_ROWS_WANT`（`tools/verify.sh:34`）、台账的刀数复钉 `SABOTAGE_KNIVES_WANT`（`tools/verify.sh:38`），两道新闸各只派生一次（`tools/verify.sh:64`、`tools/verify.sh:81`）；
 浏览器判据本身仍然只有「有没有 fail 行」 | 本轮逻辑腿跑过；浏览器腿见 §七第 1 条 |
 
@@ -173,18 +173,18 @@ UI 里没有任何第二套「合法」的定义。
 
 | 刀 | 这一刀模拟的是 | 打哪个文件 | 针（台账行之外唯一命中） | 改成 | 必须点名的那条断言 | 实测 rc |
 | --- | --- | --- | --- | --- | --- | --- |
-| S1 | 文档档位表里那一格的候选数被手改了一位 | `README.md` | `\| 2 / 4 / 8，≥3 格 \| 14 \|` | `\| 2 / 4 / 8，≥3 格 \| 15 \|` | D1 档位表这一格的候选数 == candidates() 现数 | ? |
-| S2 | 代码改了上限常数、文档与棋书还是旧值 | `js/core/make.js` | `export const MAX_STATES = 419;` | `export const MAX_STATES = 418;` | D2 make.js 的 MAX_STATES == 现算宇宙大小 | ? |
-| S3 | 承诺表把某套的断言条数抄少了一行 | `README.md` | `\| `rows: 43 fail: 0` \|` | `\| `rows: 42 fail: 0` \|` | D3 承诺表这一行的 rows/fail 与本轮真跑相同 | ? |
-| S4 | 看门狗预算被改了、文档还写着 420 | `tools/verify.sh` | `WD_TIMEOUT:-420}` | `WD_TIMEOUT:-421}` | D4 verify.sh 的看门狗预算 == 文档写的 420 s | ? |
-| S5 | 发货合计被改了一个位（340 → 341） | `README.md` | `合计 **340 个合法首口` | `合计 **341 个合法首口` | D5 32 关 / 340 合法首口 / 44 胜口 / 296 错误首口 / 372 格 == 发货文件逐行加总 | ? |
-| S6 | 代码上面加了一行，文档的行号引用没跟着改 | `README.md` | `js/core/shapes.js:20-22` | `js/core/shapes.js:20-21` | D6 文档引用的那一行号仍指回原来那段代码 | ? |
-| S7 | 文档抄的存储键名与源码不同串了 | `README.md` | `只有一个 localStorage 键 `chomp.save.v1`` | `只有一个 localStorage 键 `chomp.save.v2`` | D7 存档键名文档与源码同串 | ? |
-| S8 | 场景调用点的静态计数被改了一个（17 → 18） | `README.md` | `boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | `boot 18 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | D8 场景的 rec() 调用点数 == 文档写的数 | ? |
-| S9 | 毫秒读数被摘掉了出处（"出处见 §6"没了） | `DESIGN.md` | `耗时 0.03 s——那是读数，出处见 §6 计时量` | `耗时 0.03 s` | D9 DESIGN 前三节里每一处 0.0x s 读数都挂着「出处见 §6」 | ? |
-| S10 | 钉不住的那句话被从文档里删掉了 | `README.md` | `机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。` | `''` | D10 unpinned 清单里的那句话还在文档里 | ? |
-| S11 | 刀被改名，台账与刀谱不再是同一批 | `tools/sabotage.mjs` | `  { id: 'S6',` | `  { id: 'S6x',` | D11a README 台账的把数与 sabotage.mjs 的刀数相同 | ? |
-| S12 | 闸自己的组数地板被调低（12 → 11） | `tools/doctest.mjs` | `emitted.size === 12` | `emitted.size === 11` | D12a 这道闸自己是十二组 | ? |
+| S1 | 文档档位表里那一格的候选数被手改了一位 | `README.md` | `\| 2 / 4 / 8，≥3 格 \| 14 \|` | `\| 2 / 4 / 8，≥3 格 \| 15 \|` | D1 档位表这一格的候选数 == candidates() 现数 | 1 |
+| S2 | 代码改了上限常数、文档与棋书还是旧值 | `js/core/make.js` | `export const MAX_STATES = 419;` | `export const MAX_STATES = 418;` | D2 make.js 的 MAX_STATES == 现算宇宙大小 | 1 |
+| S3 | 承诺表把某套的断言条数抄少了一行 | `README.md` | `\| `rows: 43 fail: 0` \|` | `\| `rows: 42 fail: 0` \|` | D3 承诺表这一行的 rows/fail 与本轮真跑相同 | 1 |
+| S4 | 看门狗预算被改了、文档还写着 420 | `tools/verify.sh` | `WD_TIMEOUT:-420}` | `WD_TIMEOUT:-421}` | D4 verify.sh 的看门狗预算 == 文档写的 420 s | 1 |
+| S5 | 发货合计被改了一个位（340 → 341） | `README.md` | `合计 **340 个合法首口` | `合计 **341 个合法首口` | D5 32 关 / 340 合法首口 / 44 胜口 / 296 错误首口 / 372 格 == 发货文件逐行加总 | 1 |
+| S6 | 代码上面加了一行，文档的行号引用没跟着改 | `README.md` | `js/core/shapes.js:20-22` | `js/core/shapes.js:20-21` | D6 文档引用的那一行号仍指回原来那段代码 | 1 |
+| S7 | 文档抄的存储键名与源码不同串了 | `README.md` | `只有一个 localStorage 键 `chomp.save.v1`` | `只有一个 localStorage 键 `chomp.save.v2`` | D7 存档键名文档与源码同串 | 1 |
+| S8 | 场景调用点的静态计数被改了一个（17 → 18） | `README.md` | `boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | `boot 18 / play 20 / routes 14 / save 12 / pointer 25 个调用点` | D8 场景的 rec() 调用点数 == 文档写的数 | 1 |
+| S9 | 毫秒读数被摘掉了出处（"出处见 §6"没了） | `DESIGN.md` | `耗时 0.03 s——那是读数，出处见 §6 计时量` | `耗时 0.03 s` | D9 DESIGN 前三节里每一处 0.0x s 读数都挂着「出处见 §6」 | 1 |
+| S10 | 钉不住的那句话被从文档里删掉了 | `README.md` | `机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。` | `''` | D10 unpinned 清单里的那句话还在文档里 | 1 |
+| S11 | 刀被改名，台账与刀谱不再是同一批 | `tools/sabotage.mjs` | `  { id: 'S6',` | `  { id: 'S6x',` | D11a README 台账的把数与 sabotage.mjs 的刀数相同 | 1 |
+| S12 | 闸自己的组数地板被调低（12 → 11） | `tools/doctest.mjs` | `emitted.size === 12` | `emitted.size === 11` | D12a 这道闸自己是十二组 | 1 |
 
 ---
 

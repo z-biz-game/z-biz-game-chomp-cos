@@ -213,8 +213,9 @@ const tree2 = gitStatus();
 // 收尾对账：从开工到收工，树上**多出来**的路径只允许是 README 的那次回写，而且只允许在
 // 这一版真的写了数的时候出现（写了 0 行 = 台账本来就已经是本版了，那就必须一个字节都不多）。
 // 上一版在这里比的是「git status 字符串全等」，可回写 README 是台账**自己的**动作，
-// 全等就等价于"第一次跑必然死"——只有已经盖章的那一版才跑得过去。
-const paths = (x) => x.split('\n').filter(Boolean).map((l) => l.slice(3).trim());
+// 全等就等价于"第一次跑必然死"——只有已经盖章的那一版才跑得过去。取路径按最后一个空格切，
+// 不按固定偏移：gitStatus() 交回来的是整串 trim 过的文本，第一行那个前导空格已经被吃掉了。
+const paths = (x) => x.split('\n').filter(Boolean).map((l) => l.slice(l.lastIndexOf(' ') + 1));
 const dirt = [...new Set(paths(tree2).filter((f) => !paths(tree0).includes(f)))].sort();
 const want = written ? ['README.md'] : [];
 if (dirt.join(',') !== want.join(',')) {
