@@ -139,7 +139,7 @@ UI 里没有任何第二套「合法」的定义。
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
 | `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
-| `tools/doctest.mjs`（702 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 367 fail: 0`（本次实发 367 项，见 §一） |
+| `tools/doctest.mjs`（705 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 367 fail: 0`（本次实发 367 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/playtest.mjs`（592 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:180-344`，注释在 177-179 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
 | `tools/sabotage.mjs`（232 行） | **破坏试验台账**：十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
@@ -351,7 +351,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
    （D3 那两行 + S13/S14），浏览器腿的读数才第一次可信。
 2. **不承诺「断言的内容有意义」，只承诺「条数少不掉」。** 条数这一半本轮已经钉上了三层：
    `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171，就是九套真跑交回的条数之和，文档闸的 D3
-   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:694` 的 `EXPECT_ROWS` 与
+   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:697` 的 `EXPECT_ROWS` 与
    `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT`（两道把闸自己的条数钉死，少发一条断言就红，
    含那条自数）、`tools/verify.sh:38` 的 `SABOTAGE_KNIVES_WANT`（刀被删一把就是 verify 红）。
    「少跑一套」也红：文档闸 D3d 断言 `test/` 下恰好九个文件，且九行逐套 `rows:` 要与 §一 承诺表一致。

@@ -314,11 +314,14 @@ const nodeTest = spawnSync(process.execPath, ['--test', ...SUITE_FILES.map((f) =
 // tests 1 / fail 1，本机 v24 才把目录展开成九支文件。所以参数由 SUITE_FILES 派生，判定只取与版本
 // 无关的三件事（rc、每套交回的那一行 rows:、聚合 fail 0），tests 只作观测印在日志里。
 const ntOut = nodeTest.stdout || '';
-const ntRuns = (ntOut.match(/^rows: \d+ fail: 0$/gm) || []).length;
 const ntAgg = /tests (\d+)[\s\S]*?pass (\d+)[\s\S]*?fail (\d+)/.exec(ntOut);
-ok(nodeTest.status === 0 && ntRuns === SUITE_FILES.length && !!ntAgg && +ntAgg[3] === 0,
-  'D3 node --test 跑 SUITE_FILES 派生的那九支：rc 0、每套各交回一行 rows:、聚合 fail 0',
-  `node ${process.version} · rc=${nodeTest.status} · rows 行 ${ntRuns}/${SUITE_FILES.length} · 观测聚合 ${ntAgg ? ntAgg.slice(1, 4).join('/') : '解析不到'}`);
+// runner 会把子进程的 stdout 挂上它自己的框架（v22 加缩进、v24 原样），所以不比行首，只取那九个
+// 数字本身，并要求它们与上面逐套直跑交回的**多重集合**相同 —— 少一套、多一套、数字漂了都会红。
+const ntNums = (ntOut.match(/rows: (\d+) fail: \d+/g) || []).map((x) => +/^rows: (\d+)/.exec(x)[1]).sort((a, b) => a - b);
+const directNums = SUITE_FILES.map((f) => measured[f.replace('.test.mjs', '')].rows).sort((a, b) => a - b);
+ok(nodeTest.status === 0 && ntNums.length === SUITE_FILES.length && ntNums.join() === directNums.join() && !!ntAgg && +ntAgg[3] === 0,
+  'D3 node --test 跑 SUITE_FILES 派生的那九支：rc 0、九行 rows: 的数字与逐套直跑相同、聚合 fail 0',
+  `node ${process.version} · rc=${nodeTest.status} · rows 行 ${ntNums.length}/${SUITE_FILES.length} · ${ntNums.join() === directNums.join() ? '数字与直跑同' : `漂：runner ${ntNums.join()} vs 直跑 ${directNums.join()}`} · 观测聚合 ${ntAgg ? ntAgg.slice(1, 4).join('/') : '解析不到'}`);
 // 壳层版本号是 js/main.js 里的一个常数，不是抄进场景的字面量：VERSION 从 1 抬到 2 那一次，
 // @boot 写死的 `c.version === 1` 红了三天而应用无恙。这里钉的就是「它仍由源码派生」。
 const mainVersion = Number((read('js/main.js').match(/const VERSION = (\d+);/) || [])[1]);
@@ -487,7 +490,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:694'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:697'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
