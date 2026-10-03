@@ -191,8 +191,8 @@ UI 里没有任何第二套「合法」的定义。
 | S10 | 钉不住的那句话被从文档里删掉了 | `README.md` | `机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。` | `''` | D10 unpinned 清单里的那句话还在文档里 | 1 |
 | S11 | 刀被改名，台账与刀谱不再是同一批 | `tools/sabotage.mjs` | `  { id: 'S6',` | `  { id: 'S6x',` | D11a README 台账的把数与 sabotage.mjs 的刀数相同 | 1 |
 | S12 | 闸自己的组数地板被调低（12 → 11） | `tools/doctest.mjs` | `emitted.size === 12` | `emitted.size === 11` | D12a 这道闸自己是十二组 | 1 |
-| S13 | `node --test` 少派生一套（九支文件名被削成八支） | `tools/doctest.mjs` | `...SUITE_FILES.map((f) =>` | `...SUITE_FILES.slice(0, 8).map((f) =>` | D3 node --test 跑 SUITE_FILES 派生的那九支 | ? |
-| S14 | 壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天） | `tools/playtest.mjs` | `c.version === Number('${SHELL_VERSION}')` | `c.version === 1` | D3 @boot 的壳层版本仍从 js/main.js 的常数派生 | ? |
+| S13 | `node --test` 少派生一套（九支文件名被削成八支） | `tools/doctest.mjs` | `...SUITE_FILES.map((f) =>` | `...SUITE_FILES.slice(0, 8).map((f) =>` | D3 node --test 跑 SUITE_FILES 派生的那九支 | 1 |
+| S14 | 壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天） | `tools/playtest.mjs` | `c.version === Number('${SHELL_VERSION}')` | `c.version === 1` | D3 @boot 的壳层版本仍从 js/main.js 的常数派生 | 1 |
 
 ---
 

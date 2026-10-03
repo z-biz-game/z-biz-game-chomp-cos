@@ -13,9 +13,9 @@
 | 关卡 | 32 关，4 档（shoal / linked / twined / master），全部"先手必胜"，`k` 逐关印出 |
 | 依赖数 | 0（`dependencies` 与 `devDependencies` 都是 `{}`） |
 | 二进制资产 | 0（画面全部 canvas 2D 程序绘制，favicon 是内联 SVG data-URI） |
-| node 断言 | 165 行，0 失败（`node --test test/` → tests 8 / pass 8 / fail 0） |
-| 浏览器断言 | 85 行，0 失败（@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21），console 干净 |
-| 验收 | `bash tools/verify.sh` → `=== ALL GREEN ===`，exit 0 |
+| node 断言（本机 2026-09-27 那一次；本轮已是九套 171 行，读数以 README §一 为准） | 165 行，0 失败（`node --test test/` → tests 8 / pass 8 / fail 0） |
+| 浏览器断言（同一轮，2026-09-27） | 85 行，0 失败（@boot 15 / @play 20 / @routes 17 / @save 12 / @pointer 21），console 干净 |
+| 验收（同一轮，2026-09-27） | `bash tools/verify.sh` → `=== ALL GREEN ===`，exit 0 |
 | 测试钩子 / 路由 | `window.chomp` · `#/c/<n>` `#/lot/<id>` `#/daily` `#/random/<tier>/<seed>` |
 | 端口 | web 5201 / CDP 9361（与兄弟仓 5180/9340、5181/9341、5191/9351 错开） |
 
