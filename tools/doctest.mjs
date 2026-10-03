@@ -565,7 +565,7 @@ const fileFacts = [
   ['manifest.webmanifest', /（27 行 \/ 1,440 B）/, 27, 1440],
   ['sw.js', /同名带版本缓存 chomp-cos-v2（92 行）/, 92, null],
   ['js/pwa.js', /注册器（31 行）/, 31, null],
-  ['css/game.css', /样式（183 行 \/ 8,203 B）/, 183, 8203],
+  ['css/game.css', /样式（207 行 \/ 8,941 B）/, 207, 8941],
   ['js/core/anim.js', /固定步长模拟（150 行）/, 150, null],
   ['assets/gen/make_art.py', /（448 行 \/ 19,039 B/, 448, 19039],
   ['tools/playtest.mjs', /（592 行 \/ 38,193 B）/, 592, 38193],

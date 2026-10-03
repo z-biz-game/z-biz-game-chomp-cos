@@ -37,7 +37,7 @@
 | 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a`。**本机没有 Pillow**（`python3 -c "import PIL"` 报 ModuleNotFoundError），所以这条 `python3` 命令本轮跑不起来 —— 这一格的四项读数与指纹是 `node tools/doctest.mjs` 的 D7 组在 node 里读 IHDR 现量交回的（读 `make_art.py` 的期望表 + 对 `assets/` 逐张 sha256），不是引用旧文档；把这条命令补成能跑不在本轮的可动范围里，写在这里是缺陷而不是省略 | 应存在 18 张 / 缺失 0 / 0字节 0 / 边长≥180 9 张，指纹 `sha256[:12] = 3f8bac3be94a` |
-| 32 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **32 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 33 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **33 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
 | 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 367 fail: 0` |
 | 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-03 跑绿；**原样**跑在这台有兄弟 agent 的机器上仍会被它自己的预检拒，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
@@ -89,7 +89,7 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 367 项**�
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit && npm run doctest`（`package.json:14`） | **跑过**，见 §一 与下面两道新闸 |
-| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 32 个文件 | **跑过**，`OK` |
+| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 33 个文件 | **跑过**，`OK` |
 | `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
 | `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 367 fail: 0` |
 | `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十四把刀各打一份临时副本 | **跑过**，台账见 §四 |
@@ -282,7 +282,7 @@ manifest.webmanifest       可安装描述（27 行 / 1,440 B）：5 个 icons �
 sw.js                      同名带版本缓存 chomp-cos-v2（92 行）：同源子资源**网络优先**（缓存优先 + 手写
                            版本号会把旧 JS 永久钉死），activate 删掉一切非当前版本的缓存，离线时导航退回 index.html
 js/pwa.js                  注册器（31 行）：file:// 与非浏览器环境静默跳过并回报理由，不抛未捕获异常
-css/game.css               样式（183 行 / 8,203 B）：safe-area env() 内缩、button 44×44 命中区、
+css/game.css               样式（207 行 / 8,941 B）：safe-area env() 内缩、button 44×44 命中区、
                            暂停幕布、模态、kbd，以及真的 @media (prefers-reduced-motion: reduce)
 js/main.js                 装配层：DOM、路由、存档、暂停/静音/全屏/教学/键盘光标，`window.chomp` 那张闸用的脸
 js/view.js                 canvas 绘制 + 手势几何 + rAF 外壳（cellPoint / pointAt / clampToBar / goneSquares /
