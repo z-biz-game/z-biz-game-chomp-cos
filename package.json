@@ -14,7 +14,9 @@
     "test": "npm run check && npm run unit && npm run doctest",
     "verify": "bash tools/verify.sh",
     "doctest": "node tools/doctest.mjs",
-    "sabotage": "node tools/sabotage.mjs"
+    "sabotage": "node tools/sabotage.mjs",
+    "deploy-set": "node tools/deploy-set.mjs",
+    "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"
   },
   "keywords": [
     "game",

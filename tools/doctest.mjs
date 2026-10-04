@@ -343,9 +343,13 @@ eq(wc('tools/bake.mjs'), Number((README.match(/`tools\/bake\.mjs`（(\d+) 行）
 eq(wc('tools/harness.mjs'), Number((README.match(/`tools\/harness\.mjs`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的 harness 行数 == 盘上');
 eq(wc('tools/doctest.mjs'), Number((README.match(/`tools\/doctest\.mjs`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的 doctest 行数 == 盘上（这道闸自己也在台账上）');
 eq(wc('tools/sabotage.mjs'), Number((README.match(/`tools\/sabotage\.mjs`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的 sabotage 行数 == 盘上');
-const toolsRows = all(between(README, /^\`tools\/\` 是六个东西/, /^\n五套浏览器场景/), /^\| `tools\/([\w.]+)`（(\d+) 行）/gm);
-ok(toolsRows.length === 6, 'D4b README §四 的 tools 清单解析到 6 件（改了 tools/ 就必须同步改这一段）', `${toolsRows.length} 件`);
-ok(readdirSync(join(ROOT, 'tools')).sort().join(',') === toolsRows.map((r) => r[1]).join(','), 'D4 tools/ 目录里就是这六件，一件不多一件不少', readdirSync(join(ROOT, 'tools')).join(','));
+eq(wc('tools/assemble-site.sh'), Number((README.match(/`tools\/assemble-site\.sh`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的 assemble 清单行数 == 盘上');
+eq(wc('tools/deploy-set.mjs'), Number((README.match(/`tools\/deploy-set\.mjs`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的部署集闸行数 == 盘上');
+eq(wc('tools/deploy-set-selftest.mjs'), Number((README.match(/`tools\/deploy-set-selftest\.mjs`（(\d+) 行）/) || [])[1]), 'D4 README §四 写的部署集台架行数 == 盘上');
+const toolsRows = all(between(README, /^\`tools\/\` 是九个东西/, /^\n五套浏览器场景/), /^\| `tools\/([\w.-]+)`（(\d+) 行）/gm);
+ok(toolsRows.length === 9, 'D4b README §四 的 tools 清单解析到 9 件（改了 tools/ 就必须同步改这一段）', `${toolsRows.length} 件`);
+ok(readdirSync(join(ROOT, 'tools')).sort().join(',')
+  === toolsRows.map((r) => r[1]).sort().join(','), 'D4 tools/ 目录里就是这九件，一件不多一件不少', readdirSync(join(ROOT, 'tools')).join(','));
 eq(`${/CDP_PORT=\$\{CDP_PORT:-(\d+)\}/.exec(VS)?.[1]} ${/WEB_PORT=\$\{WEB_PORT:-(\d+)\}/.exec(VS)?.[1]}`, '9361 5201', 'D4 verify.sh 的默认端口还是 9361 / 5201');
 ok(/三个号写死在源码里：\*\*web 5201\*\*.*\*\*CDP 9361\*\*/s.test(README), 'D4 README §八 那两个端口号仍在（换成别的数就是文档自己漂了）', '§八 端口与 URL 形态');
 eq([2, 3, 4, 5, 6, 7, 8].map((n) => new RegExp(`exit ${n}\\b`).test(VS)).join(','), 'true,true,true,true,true,true,true', 'D4 verify.sh 的七个退出码 2/3/4/5/6/7/8 逐个还在源码里');
@@ -359,8 +363,8 @@ const ciSabotage = lineOf('.github/workflows/ci.yml', /node tools\/sabotage\.mjs
 ok(ciDoctest > 0 && ciSabotage > 0 && /"doctest": "node tools\/doctest\.mjs"/.test(read('package.json'))
   && /"sabotage": "node tools\/sabotage\.mjs"/.test(read('package.json')),
   'D4 CI、npm 脚本与 verify.sh 跑的是同一条命令（两道新闸都在 ci.yml 的 unit job 里）', `ci.yml:${ciDoctest}+${ciSabotage}`);
-const scriptRows = all(between(README, /^`dependencies` 与/, /^\n单独跑其中一套/), /^\| `npm (?:run |)(\w+)` \| .{0,60}?`([^`]+)`/gm);
-ok(scriptRows.length >= 10, 'D4c README 二 的 scripts 表解析到至少 10 行', `${scriptRows.length} 行`);
+const scriptRows = all(between(README, /^`dependencies` 与/, /^\n单独跑其中一套/), /^\| `npm (?:run |)([\w:-]+)` \| .{0,60}?`([^`]+)`/gm);
+ok(scriptRows.length >= 12, 'D4c README 二 的 scripts 表解析到至少 12 行', `${scriptRows.length} 行`);
 for (const r of scriptRows) {
   const key = r[1];
   const docCmd = r[2].replace(/\\\|/g, '|');
@@ -471,7 +475,7 @@ const CITES = [
   ['server.cjs', /function startServer\(\{ port = 5201/, 'server.cjs:49'],
   ['server.cjs', /Number\(process\.argv\[2\]\)/, 'server.cjs:60'],
   ['package.json', /"check": "for f in/, 'package.json:12'],
-  ['package.json', /"dependencies": \{\}/, 'package.json:32-33'],
+  ['package.json', /"dependencies": \{\}/, 'package.json:34-35'],
   ['electron/main.cjs', /startServer\(\{ port: 0 \}\)/, 'electron/main.cjs:7-8'],
   ['assets/gen/make_art.py', /def png_dims/, 'assets/gen/make_art.py:383'],
   ['tools/playtest.mjs', /process\.env\.CDP_PORT \|\| 9361/, 'tools/playtest.mjs:20'],
@@ -490,7 +494,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:697'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:701'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
@@ -694,7 +698,7 @@ const promiseRow = (README.match(/\| `node tools\/doctest\.mjs`[^\n]*?`rows: (\d
 ok(!!promiseRow && +promiseRow === FINAL, 'D12c README 承诺表里这道闸自报的 rows 等于本次实际条数', `文档 ${promiseRow || '（解析不到）'} vs 本次 ${FINAL}`);
 // 自数钉（组织纪律：闸不许靠「少一条断言」变绿）。这一条的比较同样发生在自增之前，
 // 所以常量等于**印出来的总条数**，含这一条自己。verify.sh 再用 DOCTEST_ROWS_WANT 复钉一次。
-const EXPECT_ROWS = 367;
+const EXPECT_ROWS = 372;
 ok(rows + 1 === EXPECT_ROWS, 'D12d 本闸条数 == 文件里钉死的 EXPECT_ROWS（少一条断言就红，含这一条自己）', `EXPECT_ROWS=${EXPECT_ROWS} / 印出来的 rows 必须是它`);
 
 console.log(`\n合计 ${rows} 项，${fail.length} 项失败`);

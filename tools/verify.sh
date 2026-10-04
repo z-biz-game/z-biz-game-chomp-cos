@@ -31,7 +31,7 @@ CHROME=${CHROME_BIN:-}
 MIN_LOGIC_ROWS=${MIN_LOGIC_ROWS:-171}
 # Re-pin of the documentation gate's own self-count (EXPECT_ROWS inside tools/doctest.mjs): a gate
 # that quietly loses an assertion must not be able to exit 0. Change one, change both.
-DOCTEST_ROWS_WANT=${DOCTEST_ROWS_WANT:-367}
+DOCTEST_ROWS_WANT=${DOCTEST_ROWS_WANT:-372}
 # The sabotage ledger's knives: one per gate group, each must drive the doc gate red AND name the
 # assertion it killed. Fewer knives printed than this = a knife was deleted, which is a red, not a
 # faster run. The ledger writes its measured rc back into README.md, so it only runs on a clean tree.

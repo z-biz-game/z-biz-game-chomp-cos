@@ -23,6 +23,8 @@
 
 ---
 
+
+- 上线：https://z-biz-game.github.io/z-biz-game-chomp-cos/（Pages 的项目站点。tools/deploy-set.mjs 的 R7 拿这一句当尺子：og:image 的前缀必须是它。）
 ## 一、承诺表：每一条都是一条真会红的命令
 
 | 承诺 | 哪条命令判它 | 判的是什么 | 本轮交回 |
@@ -37,8 +39,8 @@
 | 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a`。**本机没有 Pillow**（`python3 -c "import PIL"` 报 ModuleNotFoundError），所以这条 `python3` 命令本轮跑不起来 —— 这一格的四项读数与指纹是 `node tools/doctest.mjs` 的 D7 组在 node 里读 IHDR 现量交回的（读 `make_art.py` 的期望表 + 对 `assets/` 逐张 sha256），不是引用旧文档；把这条命令补成能跑不在本轮的可动范围里，写在这里是缺陷而不是省略 | 应存在 18 张 / 缺失 0 / 0字节 0 / 边长≥180 9 张，指纹 `sha256[:12] = 3f8bac3be94a` |
-| 33 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **33 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
-| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 367 fail: 0` |
+| 35 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **35 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 372 fail: 0` |
 | 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-03 跑绿；**原样**跑在这台有兄弟 agent 的机器上仍会被它自己的预检拒，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
 
@@ -67,7 +69,7 @@ rows: 15 fail: 0     # storage
 `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171）是逻辑腿的地板，交回的条数低于它就 `FAILED=1`，
 所以「少跑一套」「某套少写一半断言」都会红，而不是安静地少几条；`node tools/doctest.mjs` 的 D3 组
 再把每一套自己交回的 `rows: N fail: M` 与这张表**逐套**比一次（改一套的条数而不改文档就是红），
-D12 组再把这道闸自己这一次的条数钉住：**本次实发 367 项**，与它自己最后那行 `rows: 367` 必须是同一个数，
+D12 组再把这道闸自己这一次的条数钉住：**本次实发 372 项**，与它自己最后那行 `rows: 372` 必须是同一个数，
 `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT` 又把这个数复钉一遍 —— 三处任一处对不上就红。
 仓里印这个总数的命令就是文档闸自己（`npm run doctest`，`tools/verify.sh:64` 派生它的那一行）。
 值得一提：那八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
@@ -83,16 +85,18 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 367 项**�
 
 ## 二、怎么跑：`package.json` 的 scripts 逐条
 
-`dependencies` 与 `devDependencies` 都是 `{}`（`package.json:32-33`），零运行时依赖，不需要 `npm install`；
+`dependencies` 与 `devDependencies` 都是 `{}`（`package.json:34-35`），零运行时依赖，不需要 `npm install`；
 本轮实测仓内也确实没有 `node_modules/`。
 
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit && npm run doctest`（`package.json:14`） | **跑过**，见 §一 与下面两道新闸 |
-| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 33 个文件 | **跑过**，`OK` |
+| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 35 个文件 | **跑过**，`OK` |
 | `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
-| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 367 fail: 0` |
+| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 372 fail: 0` |
 | `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十四把刀各打一份临时副本 | **跑过**，台账见 §四 |
+| `npm run deploy-set` | `node tools/deploy-set.mjs`（`package.json:18`）：部署集闸，按 `tools/assemble-site.sh` 那份清单真拷一遍产物，再对拷出来的东西提要求 | **跑过**，`rows: 68 fail: 0`（42 条引用 / 6 张位图尺寸核对） |
+| `npm run deploy-set:selftest` | `node tools/deploy-set-selftest.mjs`（`package.json:19`）：上面那两颗钉的阳性证明，每一类断言当场被打红一次 | **跑过**，`rc=0`，X1–X12 逐把点名（X13 打 SKIP：这一仓的位图都是文件，那一类由 X7 证） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:60`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
 | `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 九套 + 文档闸 + 破坏试验台账 + 真 Chrome 五场景 | 本轮逻辑腿跑过（`LOGIC_ONLY=1`），浏览器腿见 §七第 1 条 |
@@ -134,15 +138,18 @@ UI 里没有任何第二套「合法」的定义。
 
 ## 四、门禁清单：`tools/` 里到底有什么
 
-`tools/` 是六个东西，其中**没有一套是独立的测试套件** —— 九套 node 测试在 `test/`（条数见 §一）：
+`tools/` 是九个东西，其中**没有一套是独立的测试套件** —— 九套 node 测试在 `test/`（条数见 §一）：
 
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
 | `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
-| `tools/doctest.mjs`（705 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 367 fail: 0`（本次实发 367 项，见 §一） |
+| `tools/doctest.mjs`（709 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 372 fail: 0`（本次实发 372 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/playtest.mjs`（592 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:180-344`，注释在 177-179 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
 | `tools/sabotage.mjs`（232 行） | **破坏试验台账**：十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
+| `tools/assemble-site.sh`（31 行） | **上线文件的唯一清单**：`index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`，位图目录按存在与否收（本仓是 `assets/`）。以前这几行手抄在 `pages.yml` 的 `run:` 里，清单落后于页面时线上 404 自己的文件而本地全绿 | CI 的 deploy 与本地闸调同一支脚本；`X1` 那把刀砍它必须让闸点名红 |
+| `tools/deploy-set.mjs`（347 行） | **部署集闸**：对拷出来的产物提三组要求——W 清单与页面同源、R 引用可达（从 `index.html` 走模块图 / CSS `url()` / manifest 的 icons/shortcuts / SW 注册点）、P 位图不谎报（声明的 `sizes` == PNG IHDR 真宽高）。引用条数与断言条数钉在文件顶部那对常量里 | 本轮 `rows: 68 fail: 0`，42 条引用 / 6 张位图核对 |
+| `tools/deploy-set-selftest.mjs`（316 行） | 上面那两颗钉的**阳性证明**：把仓复制到临时目录，每一类断言当场被打红一次（X1 清单不收位图目录 … X13 内联位图谎报尺寸），并要求闸**点名**吃掉那一刀；X10 是阴性对照——注释里的假路径不许被算成引用 | 本轮 `rc=0`，X1–X12 各点名变红、X13 因这一仓没有内联位图打 SKIP |
 | `tools/verify.sh`（236 行） | 生命周期 + 两条腿的**计数复钉**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性。逻辑腿自己判三件事：`MIN_LOGIC_ROWS` 地板（`tools/verify.sh:31`）、文档闸的条数复钉 `DOCTEST_ROWS_WANT`（`tools/verify.sh:34`）、台账的刀数复钉 `SABOTAGE_KNIVES_WANT`（`tools/verify.sh:38`），两道新闸各只派生一次（`tools/verify.sh:64`、`tools/verify.sh:81`）；
 浏览器判据本身仍然只有「有没有 fail 行」 | 本轮逻辑腿跑过；浏览器腿见 §七第 1 条 |
 
@@ -306,7 +313,7 @@ js/data/lots.js            生成物：BOOK（419 行）+ 32 关 + TIERS_META + 
 server.cjs                 零依赖静态服务（5201，root 形态）；CommonJS，Electron 的 main 也 require 它；
                            本轮补 `.webmanifest → application/manifest+json`，缺它装不上
 electron/main.cjs          桌面壳（34 行，port 0 自挑）；`electron` 未列为依赖，故本机跑不起来
-tools/harness.mjs          微型框架（node 与浏览器同形输出）
+tools/harness.mjs          微型框架（node 与浏览器同形输出） / tools/assemble-site / tools/deploy-set / tools/deploy-set-selftest
 tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
 tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（592 行 / 38,193 B）
 tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
@@ -351,7 +358,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
    （D3 那两行 + S13/S14），浏览器腿的读数才第一次可信。
 2. **不承诺「断言的内容有意义」，只承诺「条数少不掉」。** 条数这一半本轮已经钉上了三层：
    `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171，就是九套真跑交回的条数之和，文档闸的 D3
-   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:697` 的 `EXPECT_ROWS` 与
+   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:701` 的 `EXPECT_ROWS` 与
    `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT`（两道把闸自己的条数钉死，少发一条断言就红，
    含那条自数）、`tools/verify.sh:38` 的 `SABOTAGE_KNIVES_WANT`（刀被删一把就是 verify 红）。
    「少跑一套」也红：文档闸 D3d 断言 `test/` 下恰好九个文件，且九行逐套 `rows:` 要与 §一 承诺表一致。
@@ -438,3 +445,46 @@ URL 形态：**浏览器闸默认只跑一种** —— root 形态 `http://127.0
 存在的理由都在这句话上。
 
 MIT。
+
+## 上线的到底是哪一批文件
+
+这个仓没有打包器：站点=一次文件拷贝。以前「拷哪些」写在 `pages.yml` 的 `run:` 里（手抄的几行
+`cp`）。本地 `index.html` 直读仓库根，永远自洽；线上却按那份清单拷，于是页面后来引用的
+`manifest.webmanifest`、`sw.js`、`icons/*` 可能一个都没上去——线上 404，而仓里的引擎测试与
+真浏览器闸全绿，因为它们跑的都是仓库根，没有任何一步在「按清单拷」的那个环境下加载过页面。
+
+现在清单只有一份，住在 `tools/assemble-site.sh`：CI 调它拷 `_site`，本地闸调它拷临时目录，
+然后**对拷出来的产物**提要求（`tools/deploy-set.mjs`）：
+
+- **W 清单与页面同源**：`pages.yml` 里必须真有 `run: bash tools/assemble-site.sh <dir>` 这一行，
+  `ci.yml` 里必须真有 `run: node tools/deploy-set.mjs`。认的是调用那一行，不是文件里出现过这个
+  路径——注释里本来就会写它，只 grep 字符串会被一句散文喂绿。
+- **R 引用可达**：引用不靠手打名单。从 `index.html` 的 `href/src` 出发，凡解析出来是 `.js`/`.css`
+  的就把那一站也扫一遍（CSS 的 `url()`、JS 去掉注释后的 `'./…'` 字面量、`new URL(x, base)` 的两种
+  基、`navigator.serviceWorker.register`、`scope`），`manifest` 的 icons/screenshots/shortcuts 各自
+  的 `src` 也算引用。取径上读不到的那一站本身就是红（读不到＝这一站根本没扫）。每条引用都必须在
+  产物里且非 0 字节；绝对路径单列一条红，因为 Pages 挂在 `/<repo>/` 前缀下会跳出去。
+- **P 位图不许说谎**：`manifest` 声明的 `sizes` 必须等于 PNG IHDR 的真实宽高——文件图标读文件头，
+  内联成 base64 的图标先解码再读同一段。后一条不是可选项：图标可以住在文件里，也可以被内联进清单
+  （fleet 里就有仓禁发任何二进制文件，图标于是只能住在清单里）；如果 P 段只按"是不是 .png 文件"筛，
+  内联那一路的谎——声明 512、真图 192——就永远没人核。
+- **钉住两个数**：R 段实际检查的路径条数（`42`）与这一次跑的断言条数（`68`），两个数
+  都钉在 `tools/deploy-set.mjs` 顶部的那对常量里。没改页面却掉了，说明解析断了；删掉一张图标会同时
+  少一条 R10 与那张的 P1/P2，所以两个数一起钉，断言条数能漂就是闸在缩水的信号。这一节故意只写数值、
+  不写那对常量的名字：本仓原有的文档闸会拿"文档里出现过的同名标识号"回数它自己的条数（skyscraper
+  别仓的文档编号闸就是这种钉法），两道闸共用一个名字就互相打红。
+
+`tools/deploy-set-selftest.mjs` 是这两颗钉的阳性证明：它把仓库复制到临时目录，照着每一类断言
+各下一刀（X1 清单不收位图目录 / X2 模块边改名 / X3 CSS 写绝对路径 / X4 `start_url` 绝对 /
+X5 删光 >=512 图标 / X6 少一个必填字段 / X7 声明尺寸与真图不符 / X8 workflow 不调脚本 /
+X9 CI 不跑闸 / X10 是阴性对照——往入口 JS 追加一行只写在注释里的假路径，闸必须仍然绿、条数仍然
+`42`、断言仍然 `68`；X11 og:image 退回相对路径 / X12 og:image 的前缀指向别的 slug /
+X13 内联位图谎报尺寸——只在有靶子时下：X11/X12 要页面上那句 og:image，X13 要清单里真有一段 base64
+图标，没有就打印 SKIP；反过来 X1 没有位图目录可砍时改砍 css，P 段一位都不核时台架直接报靶子不够），
+要求每一刀都让闸**点名**变红。靶子从 `DEPLOY_SET_DUMP=1`
+的出处表现挑（取径真的会读的那支 JS / 那一张 CSS，不写死某一个仓的入口名），所以页面改了、仓与仓
+不同，台架跟着走。
+
+`node tools/deploy-set.mjs` 与 `node tools/deploy-set-selftest.mjs` 就是 CI 跑的那两条命令本身
+（package.json 里的 `deploy-set` / `deploy-set:selftest` 只是同一支脚本的 npm 入口）；把它们接进本仓
+那条浏览器 one-shot（`tools/verify.sh`）还欠着——那道脚本的腿名单与条数钉是每个仓自己的形状。
