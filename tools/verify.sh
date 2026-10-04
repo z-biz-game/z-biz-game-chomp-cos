@@ -85,7 +85,7 @@ if [ -z "${SKIP_UNIT:-}" ]; then
     KNIVES=$(printf '%s\n' "$SAB" | grep -c '^  红得住 ')
     echo "knives proven red and named: $KNIVES (pinned SABOTAGE_KNIVES_WANT=$SABOTAGE_KNIVES_WANT, rc $SAB_RC_READ read back from $SAB_LOG)"
     [ "$SAB_RC_READ" = "$SAB_RC" ] || { echo "台账 rc 与工件里读回来的不是同一个数" >&2; FAILED=1; }
-    [ "$SAB_RC" -eq 0 ] || { echo "台账 rc=$SAB_RC（脏树会被它自己拒掉：git status 干净才许跑）" >&2; FAILED=1; }
+    [ "$SAB_RC" -eq 0 ] || { echo "台账 rc=${SAB_RC}（脏树会被它自己拒掉：git status 干净才许跑）" >&2; FAILED=1; }
     [ "$KNIVES" -eq "$SABOTAGE_KNIVES_WANT" ] || { echo "台账只点红 $KNIVES 把，钉的是 $SABOTAGE_KNIVES_WANT 把" >&2; FAILED=1; }
     # 幂等：台账回写只动 README 的 rc 末列，同一个数就该一字不改。树上多了东西 = 这一版台账不可重复。
     git -C "$HERE" status --porcelain | grep -E ' README\.md$' >/dev/null \

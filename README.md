@@ -313,7 +313,7 @@ js/data/lots.js            生成物：BOOK（419 行）+ 32 关 + TIERS_META + 
 server.cjs                 零依赖静态服务（5201，root 形态）；CommonJS，Electron 的 main 也 require 它；
                            本轮补 `.webmanifest → application/manifest+json`，缺它装不上
 electron/main.cjs          桌面壳（34 行，port 0 自挑）；`electron` 未列为依赖，故本机跑不起来
-tools/harness.mjs          微型框架（node 与浏览器同形输出） / tools/assemble-site / tools/deploy-set / tools/deploy-set-selftest
+tools/harness.mjs          微型框架（node 与浏览器同形输出）
 tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
 tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（592 行 / 38,193 B）
 tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
