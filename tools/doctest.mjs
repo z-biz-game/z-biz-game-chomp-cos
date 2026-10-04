@@ -650,7 +650,7 @@ const UNPINNED = [
   ['deliverable 那句浏览器跑了 3 次的诚实说明', 'deliverable.md', /`tools\/verify\.sh` 跑了 3 次/],
   ['README 一 的机器规格（Darwin／核数／node 版本）', 'README.md', /机器 Darwin [\d.]+ \w+、\d+ 核、node v[\d.]+/],
   ['README 七.1 那一轮 verify.sh 被自己的预检拒了（rc=8 与那台孤儿 Chrome）', 'README.md', /`rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=\d+`/],
-  ['README 四 末段那一轮浏览器腿的逐套实测读数（跑过才写得出来，闸不复跑 Chrome 所以不重言）', 'README.md', /@boot 21 \/ @play 20 \/ @routes 17 \/ @save 12 \/ @pointer 21`\n（本机 2026-10-03/],
+  ['README 四 末段那一轮浏览器腿的逐套实测读数（跑过才写得出来，闸不复跑 Chrome 所以不重言）', 'README.md', /@boot 21 \/ @play 20 \/ @routes 17 \/ @save 12 \/ @pointer 21`\n（本机 2026-10-04/],
   ['README 一 anim 那一格的变异体读数（要临时改文件才能复现）', 'README.md', /本轮实测红 2 行：`\[136,136,136\]` 与 `2 ≠ 20`/],
   ['README 一 anim 那一格的「假红目标」读数（六行全绿）', 'README.md', /则六行全绿/],
   ['README 里「本轮之前是八行 165」这句历史说明', 'README.md', /本轮之前是八行 165/],

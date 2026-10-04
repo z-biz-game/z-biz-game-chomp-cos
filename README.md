@@ -42,7 +42,7 @@
 | 35 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **35 个文件**；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
 | 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 372 fail: 0` |
 | 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
-| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-03 跑绿；**原样**跑在这台有兄弟 agent 的机器上仍会被它自己的预检拒，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
+| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-04 两条腿都跑绿；**原样**跑会被这台机器上一台不属于本仓的孤儿 Chrome 拒，那一轮绿是显式给了 `ALLOW_ORPHAN_CHROME=1` 才开工的，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
 
 一条命令跑全部 node 侧：
 
@@ -99,7 +99,7 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 372 项**�
 | `npm run deploy-set:selftest` | `node tools/deploy-set-selftest.mjs`（`package.json:19`）：上面那两颗钉的阳性证明，每一类断言当场被打红一次 | **跑过**，`rc=0`，X1–X12 逐把点名（X13 打 SKIP：这一仓的位图都是文件，那一类由 X7 证） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:60`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
-| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 九套 + 文档闸 + 破坏试验台账 + 真 Chrome 五场景 | 本轮逻辑腿跑过（`LOGIC_ONLY=1`），浏览器腿见 §七第 1 条 |
+| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 九套 + 文档闸 + 破坏试验台账 + 真 Chrome 五场景 | 本轮两条腿都跑过（逐套读数见 §四 末段）；原样重跑的预检代价见 §七第 1 条 |
 | `npm run bake` | `node tools/bake.mjs`（`package.json:11`）：全宇宙判定 + 逐关独立建表 + 两路对账，然后**覆写 `js/data/lots.js`**（`tools/bake.mjs:221`） | **本轮未跑**：它会改写发货文件，改 `js/data/lots.js` 不在文档轮的可动范围内。它的结构量由只读路线复现（§五） |
 | `npm run electron` | `electron .`（`package.json:10`），入口 `electron/main.cjs`，它用 `startServer({port: 0})` 自己挑一个临时口（`electron/main.cjs:7-8`） | **跑不了**：`electron` 不在两个依赖表里，仓内也没有 `node_modules/`。本轮未尝试执行 |
 
@@ -151,7 +151,7 @@ UI 里没有任何第二套「合法」的定义。
 | `tools/deploy-set.mjs`（347 行） | **部署集闸**：对拷出来的产物提三组要求——W 清单与页面同源、R 引用可达（从 `index.html` 走模块图 / CSS `url()` / manifest 的 icons/shortcuts / SW 注册点）、P 位图不谎报（声明的 `sizes` == PNG IHDR 真宽高）。引用条数与断言条数钉在文件顶部那对常量里 | 本轮 `rows: 68 fail: 0`，42 条引用 / 6 张位图核对 |
 | `tools/deploy-set-selftest.mjs`（316 行） | 上面那两颗钉的**阳性证明**：把仓复制到临时目录，每一类断言当场被打红一次（X1 清单不收位图目录 … X13 内联位图谎报尺寸），并要求闸**点名**吃掉那一刀；X10 是阴性对照——注释里的假路径不许被算成引用 | 本轮 `rc=0`，X1–X12 各点名变红、X13 因这一仓没有内联位图打 SKIP |
 | `tools/verify.sh`（236 行） | 生命周期 + 两条腿的**计数复钉**：端口/孤儿 Chrome 预检（`exit 6/7/8`）、找 Chrome（`exit 2`）、`/json/version` 与 web 根**双就绪轮询**（`exit 3/4`）、`window.chomp.state.id` 轮询（`exit 5`）、逐场景收花括号计数的 JSON、console 干净性。逻辑腿自己判三件事：`MIN_LOGIC_ROWS` 地板（`tools/verify.sh:31`）、文档闸的条数复钉 `DOCTEST_ROWS_WANT`（`tools/verify.sh:34`）、台账的刀数复钉 `SABOTAGE_KNIVES_WANT`（`tools/verify.sh:38`），两道新闸各只派生一次（`tools/verify.sh:64`、`tools/verify.sh:81`）；
-浏览器判据本身仍然只有「有没有 fail 行」 | 本轮逻辑腿跑过；浏览器腿见 §七第 1 条 |
+浏览器判据本身仍然只有「有没有 fail 行」 | 本轮两条腿都跑过；浏览器腿的复跑代价见 §七第 1 条 |
 
 五套浏览器场景的**条数**：`tools/verify.sh:200` 只打印 `rows: len(rows)` 并判 `fail`，**没有任何一处写着期望条数**。
 所以本轮改用静态计数：按 `rec()` 的调用点数，`@boot` 21、`@play` 20、`@save` 12、`@routes` 14 个调用点
@@ -164,7 +164,7 @@ UI 里没有任何第二套「合法」的定义。
 （卡在、卡在前递口被拒且不计费、关掉卡把盘交回来、`seenTutorial` 落进盘上那份档，17 → 21）。
 其余四套逐场景仍然对得上。
 静态点数本轮**被真跑对上了**：浏览器腿交回 `@boot 21 / @play 20 / @routes 17 / @save 12 / @pointer 21`
-（本机 2026-10-03 的一次观测，`bash tools/verify.sh` → `=== ALL GREEN ===`，console 干净）。
+（本机 2026-10-04 的一次观测，`bash tools/verify.sh` → `=== ALL GREEN ===`，console 干净；逐套读数与 10-03 那次一字不差）。
 `@routes` 那 14 → 17、`@pointer` 那 25 → 21 是上面说好的循环与分支差，另外三套调用点数与行数一字不差。
 
 `test/` 九套的条数是本轮实测交回的（§一那张表），逐套内容：
@@ -335,21 +335,23 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 "一个图片请求都不许有、favicon 必须是内联 `data:image/svg+xml`"，那是**没有美术的口径**；
 现在钉的是新口径 —— 每个位图请求都必须是同源 `/assets/` 下的 `.png`、一个 webfont/音频/SVG
 光栅请求都不许有、三处 icon `<link>` 都指向盘上真 PNG 且含 180px 那张、四张贴图在页面里
-必须报 `ready` 而不是退回程序绘制（`tools/playtest.mjs:398-409`，本机 2026-10-03 那次跑绿，见 §四 末段与 §七第 1 条）。
+必须报 `ready` 而不是退回程序绘制（`tools/playtest.mjs:398-409`，本机 2026-10-04 那次跑绿，见 §四 末段与 §七第 1 条）。
 
 ---
 
 ## 七、这个仓**不承诺**什么
 
-1. **不承诺浏览器闸在每个回合都复跑得到。** 本机 2026-10-03 那一次是绿的：五套场景 91 行、
-   `=== ALL GREEN ===`、console 干净（逐套读数在 §四 末段）。但那是**一次带日期的观测**，
+1. **不承诺浏览器闸在每个回合都复跑得到。** 本机 2026-10-03 与 2026-10-04 那两次都是绿的：五套场景 91 行、
+   `=== ALL GREEN ===`、console 干净（逐套读数在 §四 末段，两次一字不差）。但那都是**带日期的观测**，
    不是一条每轮都成立的承诺 —— 同一台机器上**原样**跑 `bash tools/verify.sh` 会被自己的预检拒绝开工：
    `rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=9373` 的 headless Chrome
    （`--user-data-dir=/tmp/sky-chrome-profile`，**不是本仓的**），并且**一个子进程都没派生** ——
    跑完之后 `:5201` 与 `:9361` 上仍然没人听。这一条就是 §八 那句「占号就当红，不借用」的实现证据。
    那一次绿是显式给了 `ALLOW_ORPHAN_CHROME=1 CDP_PORT=9361`（先确认 9361 与 5201 没人听）才开工的，
    预检本身一个字都没放宽：台架纪律写在 `DESIGN.md` 第十节，预检在 `tools/verify.sh:100` 起
-   （`exit 6/7/8` 三种抢口各一种）。
+   （`exit 6/7/8` 三种抢口各一种）。10-03 那一份日志把这台 Chrome 念成了「10 个」——一个浏览器的每个
+   renderer helper 的 argv 里都重复着同一个 `--remote-debugging-port`；现在那一行按**浏览器主进程**计数，
+   并把抢口那台的 pid／存活时长／`--user-data-dir` 一起打出来，好让人判断它是不是自己的（拒绝开工的条件没变）。
    每轮都复跑得到的只有 node 侧（D3 那九套真跑）与 §四 的静态调用点计数
    （boot 21 / play 20 / routes 14 / save 12 / pointer 25 个调用点，按 `tools/playtest.mjs:347`
    起的场景分段数的，D8 把它与文档逐字比）。本轮两者恰好对上了；**上一轮对不上**：
