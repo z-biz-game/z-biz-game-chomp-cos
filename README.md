@@ -282,8 +282,9 @@ test/domstub.mjs           最小浏览器桩（260 行）：元素/事件/local
 test/fixture.mjs           手算期望值（12 条 fixture + 两行阶梯 + 单行向量），被 anchor/solve 引用
 test/naive.mjs             第三份独立实现的枚举与无记忆化暴力递归，测试专用
 .github/workflows/ci.yml   unit + browser 两个 job（browser 跑 SKIP_UNIT=1 / WD_TIMEOUT=240）
-.github/workflows/pages.yml 组装 _site 并**当场对账**：index.html 与 manifest 指到的每条路径必须在产物里，
-                           产物里 ≥11 张非空 PNG；assets/gen（构建期脚本）不进产物
+.github/workflows/pages.yml 组装 _site（含 assets/{icons,textures,og}，assets/gen 刻意不进产物）并**当场对账**：
+                           index.html 的 href/src 与 meta content= 指到的每条路径、manifest 的每条 icon
+                           都必须在产物里，且非空 PNG ≥18 张（= make_art.py 的 EXPECTED 表张数）
 DESIGN.md / deliverable.md README.md LICENSE .gitignore
 ```
 
@@ -359,10 +360,21 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 10. **不承诺 `npm run electron` 能跑。** `electron` 既不在 `dependencies` 也不在 `devDependencies`
     （两处都是 `{}`），仓内也没有 `node_modules/`，`build` 那段配置也没有任何 CI 读它。
     本轮没有尝试执行它。桌面壳是代码存在，不是被验证过的交付物。
-11. **不承诺线上站点可读。** `pages.yml` 只拷 `index.html css js`（`.github/workflows/pages.yml:29-31`），
-    本仓 README 与 DESIGN 里也没有写出发布 URL 的那一行；`deliverable.md:149-161` 记录了
-    主代理 2026-09-27 抓到的 `/` 200 / 4,091 B 等读数（与本仓 `index.html` 的实测字节一致），
-    但那是**别人的那一次**，本轮没有做网络复核，本文也没有把任何 URL 写成仓内事实。
+11. **不承诺线上站点可读。** 发布物是 `.github/workflows/pages.yml` 里那段纯文件拷贝：本轮实测它会装
+    `index.html manifest.webmanifest sw.js css/ js/ assets/{icons,textures,og}/`（`assets/gen` 是构建期 python，刻意不进产物），
+    并**当场对账三次** —— ① `href=`/`src=` 指到的每条本地路径必须在产物里；② `content="assets/…"` 里
+    的社交卡片图也必须在（旧版只查 ①，于是 `og:image` 指着一张**根本没进产物**的 `assets/og/chomp-og.png`：
+    页面自己看不出来，只有把链接发到 IM/爬虫里才表现为「永远不出图」，本轮补了这条对账并把 og 装进产物）；
+    ③ 产物里的 PNG 数量地板从凭印象的 `≥11` 抬到 `assets/gen/make_art.py` 的 `EXPECTED` 表张数 `≥18`。
+    本轮**没有跑 GitHub Actions**（它要真推一次才跑），所以这三条只在本地按 workflow 里的**原样命令**复跑过：
+    在临时目录里按同样七条 cp 装出 `_site`，①②③ 与 manifest icon 对账全绿（`png=18`）；两发阴性对照判红 ——
+    挑走 `assets/og/chomp-og.png` ⇒ `MISSING (meta): assets/og/chomp-og.png`，挑走整张 icons 目录 ⇒ PNG 地板不再满足 18。
+    本文仍**不把任何发布 URL 写成仓内事实**：仓里 `grep -rn "github.io"` 为空，`manifest.id` 是 `/z-biz-game-chomp-cos/`、
+    `origin` 是 `github.com:z-biz-game/z-biz-game-chomp-cos`，但 Pages 域名没有第二处证据，所以 `og:image`
+    仍是**相对路径**且没有 `og:url`/`<link rel="canonical">` —— 按 Open Graph 的口径，卡片图要绝对 URL，
+    这一条是**已知未修**（修法需要运维给出真实发布域，不是仓内能算出来的），别把它读成"卡片会出图"。
+    `deliverable.md:149-161` 记录了主代理 2026-09-27 抓到的 `/` 200 / 4,091 B 等读数（与本仓 `index.html`
+    的实测字节量级一致），但那是**别人的那一次**，本轮没有做网络复核。
 12. **不承诺界面对手感与美术。** 浏览器闸只认三类证据：DOM 矩形/文本、画布像素采样、真指针事件读数。
     `.hidden`、类名、注释里的意图一概不算证据（`tools/playtest.mjs:343-352` 用像素采样判断「巧克力真的画出来了」，
     用 `getBoundingClientRect` 判断控件存在，别的一律不读）。
