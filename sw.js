@@ -10,18 +10,18 @@
 // The cache name carries the version, and `activate` deletes every other cache name, so bumping
 // VERSION is the one and only eviction step.
 
-const VERSION = 'chomp-cos-v2';
+const VERSION = 'chomp-cos-v3';
 const SHELL = [
   './',
   'index.html',
   'css/game.css',
   'js/main.js',
   'js/view.js',
+  'js/pwa.js',
   'js/core/shapes.js',
   'js/core/game.js',
   'js/core/book.js',
   'js/core/library.js',
-  'js/core/make.js',
   'js/core/rng.js',
   'js/core/solve.js',
   'js/core/storage.js',
@@ -29,8 +29,13 @@ const SHELL = [
   'js/core/audio.js',
   'js/data/lots.js',
   'manifest.webmanifest',
+  'assets/icons/favicon-32.png',
+  'assets/icons/icon-48.png',
+  'assets/icons/icon-96.png',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
+  'assets/icons/maskable-512.png',
+  'assets/icons/icon-1024.png',
   'assets/icons/apple-touch-icon.png',
   'assets/textures/cocoa-256.png',
   'assets/textures/foil-256.png',
@@ -39,8 +44,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  // Warm the shell, but never let a missing icon fail the install: the game is 20 modules and a
-  // board, and a 404 on a texture must not cost the player their offline copy.
+  // Warm the shell, but never let a missing icon fail the install: the boot graph is 13 modules
+  // plus a board, and a 404 on a texture must not cost the player their offline copy.
   e.waitUntil((async () => {
     const cache = await caches.open(VERSION);
     await Promise.all(SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch(() => null)));
