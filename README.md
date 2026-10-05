@@ -37,10 +37,11 @@
 | 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`）；**分段解码**：垃圾样本 `null` 载荷 / 缺字段 / 类型错 / 越界值各一条，外加一份把 `null`、数组、裸字符串三条坏记录夹在两条好记录中间的档 —— 只丢那三条，同档邻居与 `daily`、`settings` 段照读，丢掉的位点还能重新记账（`js/core/storage.js:58-87`）。反证：把 decode 换成一段式 `{ ...blank(), ...p }` 合并，**2 行判红**（`Object.keys(records).length` 5≠2、`daily` 2≠1），不是空跑 | `rows: 16 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 上面那条量的是 anim 模块；**关卡内**（一局正在打的巧克力）也得三档一致 | `node test/frame.test.mjs` | 官方量具 `cos_frame_probe.js` 用 vm 顺序执行 `<script src>`，读不了本仓 ESM：本轮（2026-10-01）复跑仍是 `30Hz/60Hz/120Hz: ERR SyntaxError: Cannot use import statement outside a module` + `结论：无法比对` —— 既不算绿也不算红。**另一把尺不能顶替它**：同目录 `cos_load_sweep.js` 已在 2026-09-30 补过 `type="module"` 入口、改走 node 原生 `import`，对本仓出 `LOADED`，但那只是「模块图在桩环境装载不抛」的证据，不含三档对拍，判不了帧率无关。这个套件用真实发盘的 master/twined 关卡池 16 张开局，每口走 `playerBite`（真改棋盘 + 对手按谱回口），取数点断言 `status==='playing'`；两把尺分开：按步号对齐（判末态一致）与按游玩时长对齐（判推进步数一致，这一把才藏不住累加器行的错配）。反证两发内建为断言，并同时钉「真模块必须绿」，防尺子空跑 | `rows: 6 fail: 0`；三档 `simSteps 272/272/272`、`particles 19/19/19`、逐粒子 8 字段最大偏差 `0.00e+0`、帧数 `68/136/272` 不同而末态全等；两发变异对照判红于 `steps=136/272/544`（差 408）与 `steps=68/136/272`（差 204） |
+| 暂停真停仿真、静音真停 AudioContext、首启引导把玩家的暂停原样还回来 | `node test/shell.test.mjs` | 把唯一碰 DOM 的那层（`js/main.js` 的系统控制）装进 `test/domstub.mjs` 的最小浏览器桩：真 `import` 发货的 main.js，按虚拟时钟喂 rAF（**从 1000ms 起**，从 0 起步会被 `js/view.js:82` 的 `lastTime === 0` 哨兵吃掉一帧）。13 行钉住规范 §2 里只有浏览器才被认为判得了的四条：暂停期间 `simSteps` 一格不涨而恢复后必须涨（累加器连 `elapsed` 都拿不到，`js/view.js:90`）、静音态**一只新振荡器都不许多建**（`audioState().built` 与桩侧 `createOscillator` 计数双证，不是把 gain 设 0）、`context` 真的走 `suspend/resume`、回访开机不再弹引导且棋盘是活的。另有一行钉住「先收浮层、再清档」的次序（收浮层会往存档写 `seenTutorial`）。**反证**：同一套件跑在修之前的 `main.js`（`git archive 5670f37` 到 /tmp）上 ⇒ `rows: 13 fail: 4`，四行红恰好点名那两发缺陷；跑在修好的上 ⇒ `rows: 13 fail: 0`。桩不是空跑还有一发独立自检：`setPaused(true)` 之后 `pump(20)` 必须不推进、`setPaused(false)` 之后必须推进 | `rows: 13 fail: 0`；反证位 `rows: 13 fail: 4`
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源。`--check` 对账四件事：① 期望表 `EXPECTED`（`assets/gen/make_art.py:55`）逐张核 IHDR 宽高；② `color_count` 平色地板 16（`assets/gen/make_art.py:454`）—— 挡掉「不是 0 字节、但也不是画出来的」那种占位；③ `rebuild_all()` 把全套重画进临时目录**连画两遍**，两遍不一致即本机不确定；④ 除 og 卡外逐张比 sha256 与盘上字节，不一致就是手改过或生成器漂移。og 卡排了字、字体就地取材（`FONT_DEPENDENT`，`assets/gen/make_art.py:68`），只对本机确定性负责 —— 这条豁免写在代码与这里，不假装成跨机器字节全等 | 本轮读数 `应存在 18 张 / 盘上在 18 张 / 边长≥180 9 张`、`字节复现 17/17 张与本机重画全等（og 卡本机字体 Arial Bold.ttf 亦字节相同）`、`色值最少的一张 assets/icons/icon-16.png = 188 个`、`指纹 sha256[:12] = acc1d7ed544e`、rc=0。三发阴性对照**全部判红**：icon-512 尾部追加 1 字节 ⇒ `BAD ... 字节不同`；crumb-48 换成纯色块 ⇒ `BAD 只有 1 个不同色值 —— 平色块占位`；apple-touch-icon 换成 120×120 ⇒ `BAD IHDR 120x120，期望 180x180`；三发退出码均为 1 |
 | 页面唯一的入口脚本 `js/main.js` 连同它的整条 ESM 依赖图，在桩环境里真的装得起来（不只是语法对） | `node polish/script/cos_load_sweep.js z-biz-game-chomp-cos` | `npm run check` 只证明可解析；本仓 `index.html` 只有**一支** `<script type="module" src="js/main.js">`，尺子把它交给 node 原生 `import`；而 `js/` 下 14 个模块**一支动态 import 都没有**（`grep -rn "import(" js/` 空），所以这一跑覆盖的是整条静态依赖图，不是只 main.js | 本轮读数 `z-biz-game-chomp-cos \| LOADED`，rc=0。它**不**证明玩法正确，也不代替 §一那条三档对拍 |
-| 31 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **31 个文件**（比上一轮多一个 `test/frame.test.mjs`）；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
-| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮**被它自己的预检拒了**，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:142` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `:145-148` 的 console 断言） | 本轮**零条浏览器读数**：`rc=8`，五套场景一条都没执行 |
+| 33 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **33 个文件**（比上一轮多 `test/domstub.mjs` 与 `test/shell.test.mjs`）；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮实跑过一次取基线，之后按派工单禁跑浏览器线） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:142` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `:145-148` 的 console 断言） | 本轮实测到 HEAD `5670f37` 上这条闸是**红的**：`@play rows: 17 fail: 8`、`@save rows: 3 fail: 2`、`@pointer rows: 22 fail: 7`，每一口都答 `{"rejected":"已暂停","paused":true}`。根因不是玩法，是套件与首启引导脱钩（`29207c1` 让首启 `openTutorial(true)` 把棋盘停住，五套套件都 `nonav` 复用同一页面、从没关过浮层）。已修：套件先按玩家的方式点掉 `#tut-close` 再清档，`@boot` 那行失效的 `c.version === 1`（`js/main.js:19` 早已是 `VERSION = 2`）换成真契约。**修完未复跑**（禁占 CDP），静态验证只有 `node --check` 与四个 scenario 串逐个 `new Function` 编译通过；这条闸的 after 读数留给浏览器线 |
 
 一条命令跑全部 node 侧：
 
@@ -48,7 +49,7 @@
 npm test          # = npm run check && npm run unit
 ```
 
-本轮原样结论行（十套各打一行，按 `test/*.test.mjs` 的字母序，`tools/harness.mjs:41`）：
+本轮原样结论行（十一套各打一行，按 `test/*.test.mjs` 的字母序，`tools/harness.mjs:41`）：
 
 ```
 rows: 43 fail: 0     # anchor
@@ -59,11 +60,12 @@ rows: 23 fail: 0     # game
 rows: 17 fail: 0     # library
 rows: 25 fail: 0     # model
 rows: 13 fail: 0     # rng
+rows: 13 fail: 0     # shell   ← 本轮新增：系统控制状态机（暂停/静音/引导/键盘）跑在 DOM 桩里
 rows: 16 fail: 0     # solve
 rows: 16 fail: 0     # storage  ← 本轮新增一行：分段解码的垃圾档实测
 ```
 
-**178 是把上面十行加起来的和**（本轮之前是九行 171，`deliverable.md:16,102,152` 记的是更早的
+**191 是把上面十一行加起来的和**（本轮之前是十行 178，`deliverable.md:16,102,152` 记的是更早的
 165 —— 那是上一轮有人手加之后抄进记录行的，不是判据），仓里没有任何一条**命令**印这个总数，
 也没有「少跑一套就红」的地板（这条不是省略，是缺口，写在 §七第 2 条）。
 每条数字归属哪个套件，由 `npm run unit` 的字母序循环与套件自己的文件头注释对齐（十行依次是
@@ -83,11 +85,11 @@ storage 16）。顺带修正一条旧口径：`node --test test/` **不是**本�
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit`（`package.json:14`） | **跑过，rc=0**，输出见 §一 |
-| `npm run check` | 上面那条 31 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
-| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十个文件按字母序，任一非零立即中止 | **跑过**，十行 `rows: N fail: 0`（合计 178，见 §一） |
+| `npm run check` | 上面那条 33 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十一个文件按字母序，任一非零立即中止 | **跑过**，十一行 `rows: N fail: 0`（合计 191，见 §一） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:59`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
-| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 十套 + 真 Chrome 五场景 | **本轮禁跑**，见 §七 |
+| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 十一套 + 真 Chrome 五场景 | 本轮为取基线跑过一次（浏览器部分三套红，根因与修法见 §一那一行与 `ad314a8`）；修完未复跑 |
 | `npm run bake` | `node tools/bake.mjs`（`package.json:11`）：全宇宙判定 + 逐关独立建表 + 两路对账，然后**覆写 `js/data/lots.js`**（`tools/bake.mjs:219-221`） | **本轮未跑**：它会改写发货文件，改 `js/data/lots.js` 不在文档轮的可动范围内。它的结构量由只读路线复现（§五） |
 | `npm run electron` | `electron .`（`package.json:10`），入口 `electron/main.cjs`，它用 `startServer({port: 0})` 自己挑一个临时口（`electron/main.cjs:7-8`） | **跑不了**：`electron` 不在两个依赖表里，仓内也没有 `node_modules/`。本轮未尝试执行 |
 
@@ -284,10 +286,14 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 
 ## 七、这个仓**不承诺**什么
 
-1. **不承诺浏览器闸本轮被复验。** 本轮**试过** `bash tools/verify.sh`，它以自己的预检拒绝开工：
-   `rc=8`，日志点名这台机器上已有一个带 `--remote-debugging-port=9373` 的 headless Chrome
-   （`--user-data-dir=/tmp/sky-chrome-profile`，**不是本仓的**），并且**一个子进程都没派生** ——
-   跑完之后 `:5201` 与 `:9361` 上仍然没人听。这一条就是 §八 那句「占号就当红，不借用」的实现证据。
+1. **不承诺浏览器闸的 after 读数。** 上一轮 `verify.sh` 被自己的预检拒了（`rc=8`，机器上有个不属于本仓的
+   `--remote-debugging-port=9373`）；**本轮端口是空的，它真的跑起来了**，并且是红的：
+   `@play rows: 17 fail: 8`、`@save rows: 3 fail: 2`（`null.unlocked` 抛 TypeError）、`@pointer rows: 22 fail: 7`，
+   每一口都答 `{"rejected":"已暂停","paused":true}`。根因与修法见 §一那两行与 `ad314a8` 的正文。
+   **修完没有复跑**（派工单禁占 CDP），所以 §一那一行只有 before、没有 after —— 谁复跑谁负责填。
+   顺带两条从这次实跑里掉出来的事实：① `@boot` 那行 `c.version === 1` 早已失真（`js/main.js:19` 是 `VERSION = 2`）；
+   ② §八 记的静态调用点数（boot 17 / play 20 / routes 14 / save 12 / pointer 25）是**调用点**数，
+   不等于跑出来的 `rows`：`@play` 实跑 17 行、`@save` 因为抛异常只走到 3 行。拿调用点当条数会高估覆盖。
    台架纪律写在 `DESIGN.md` 第十节，预检本身在 `tools/verify.sh:27-44`（`exit 6/7/8` 三种抢口各一种）。
    所以 §一最后一行与 §四那五套条数**没有本轮实测**：它们分别是「源码里 `rec()` 调用点的静态计数」
    （本轮重数过一遍：boot 17 / play 20 / routes 14 / save 12 / pointer 25 个调用点，
