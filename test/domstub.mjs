@@ -138,13 +138,45 @@ class ImageStub {
   get src() { return this._src || ''; }
 }
 
+// matchMedia：真按 query 存 matches，并把 change 监听留住 —— 系统偏好切换由此可测。
+const MEDIA = new Map();
+const mediaLists = new Map();
+const MOTION_Q = '(prefers-reduced-motion: reduce)';
+
+function mediaQuery(q) {
+  if (!mediaLists.has(q)) {
+    let subs = [];
+    mediaLists.set(q, {
+      media: q,
+      get matches() { return !!MEDIA.get(q); },
+      addEventListener(t, f) { if (t === 'change') subs.push(f); },
+      removeEventListener(t, f) { subs = subs.filter((x) => x !== f); },
+      addListener(f) { subs.push(f); },
+      removeListener(f) { subs = subs.filter((x) => x !== f); },
+      onchange: null,
+      _fire() {
+        const ev = { type: 'change', media: q, matches: !!MEDIA.get(q) };
+        for (const f of subs.slice()) f(ev);
+        if (this.onchange) this.onchange(ev);
+      },
+    });
+  }
+  return mediaLists.get(q);
+}
+
+export function setMedia(q, on) { MEDIA.set(q, !!on); }
+/** 拧一下系统偏好并派发 change，等价于玩家在 OS 设置里动那一下。 */
+export function setMotionPreference(on) {
+  MEDIA.set(MOTION_Q, !!on);
+  if (mediaLists.has(MOTION_Q)) mediaLists.get(MOTION_Q)._fire();
+}
+
 const g = globalThis;
 const env = {
   document, location, localStorage, devicePixelRatio: 2, innerWidth: 1040, innerHeight: 860,
   navigator: { userAgent: 'node-domstub', language: 'zh-CN', languages: ['zh-CN'], maxTouchPoints: 0,
     clipboard: { writeText: () => Promise.resolve() } },
-  matchMedia: (q) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {},
-    addListener() {}, removeListener() {}, onchange: null }),
+  matchMedia: mediaQuery,
   requestAnimationFrame: (cb) => { rafQueue.push(cb); return rafQueue.length; },
   cancelAnimationFrame: () => {},
   addEventListener(t, f) { (winH[t] = winH[t] || []).push(f); },

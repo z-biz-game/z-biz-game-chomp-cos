@@ -38,9 +38,12 @@
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 上面那条量的是 anim 模块；**关卡内**（一局正在打的巧克力）也得三档一致 | `node test/frame.test.mjs` | 官方量具 `cos_frame_probe.js` 用 vm 顺序执行 `<script src>`，读不了本仓 ESM：本轮（2026-10-01）复跑仍是 `30Hz/60Hz/120Hz: ERR SyntaxError: Cannot use import statement outside a module` + `结论：无法比对` —— 既不算绿也不算红。**另一把尺不能顶替它**：同目录 `cos_load_sweep.js` 已在 2026-09-30 补过 `type="module"` 入口、改走 node 原生 `import`，对本仓出 `LOADED`，但那只是「模块图在桩环境装载不抛」的证据，不含三档对拍，判不了帧率无关。这个套件用真实发盘的 master/twined 关卡池 16 张开局，每口走 `playerBite`（真改棋盘 + 对手按谱回口），取数点断言 `status==='playing'`；两把尺分开：按步号对齐（判末态一致）与按游玩时长对齐（判推进步数一致，这一把才藏不住累加器行的错配）。反证两发内建为断言，并同时钉「真模块必须绿」，防尺子空跑 | `rows: 6 fail: 0`；三档 `simSteps 272/272/272`、`particles 19/19/19`、逐粒子 8 字段最大偏差 `0.00e+0`、帧数 `68/136/272` 不同而末态全等；两发变异对照判红于 `steps=136/272/544`（差 408）与 `steps=68/136/272`（差 204） |
 | 暂停真停仿真、静音真停 AudioContext、首启引导把玩家的暂停原样还回来 | `node test/shell.test.mjs` | 把唯一碰 DOM 的那层（`js/main.js` 的系统控制）装进 `test/domstub.mjs` 的最小浏览器桩：真 `import` 发货的 main.js，按虚拟时钟喂 rAF（**从 1000ms 起**，从 0 起步会被 `js/view.js:82` 的 `lastTime === 0` 哨兵吃掉一帧）。13 行钉住规范 §2 里只有浏览器才被认为判得了的四条：暂停期间 `simSteps` 一格不涨而恢复后必须涨（累加器连 `elapsed` 都拿不到，`js/view.js:90`）、静音态**一只新振荡器都不许多建**（`audioState().built` 与桩侧 `createOscillator` 计数双证，不是把 gain 设 0）、`context` 真的走 `suspend/resume`、回访开机不再弹引导且棋盘是活的。另有一行钉住「先收浮层、再清档」的次序（收浮层会往存档写 `seenTutorial`）。**反证**：同一套件跑在修之前的 `main.js`（`git archive 5670f37` 到 /tmp）上 ⇒ `rows: 13 fail: 4`，四行红恰好点名那两发缺陷；跑在修好的上 ⇒ `rows: 13 fail: 0`。桩不是空跑还有一发独立自检：`setPaused(true)` 之后 `pump(20)` 必须不推进、`setPaused(false)` 之后必须推进 | `rows: 13 fail: 0`；反证位 `rows: 13 fail: 4`
+| 预缓存表与**真实模块图**逐条对账，`sw.js` 被真跑一遍而不是读注释；离线也首启得了 | `node test/pwa.test.mjs` | 上一轮的红读数就是这条尺发现的：SHELL 表里没有 `js/pwa.js`（网络-first 的 SW 一旦离线，`installWhenReady()` 那一支模块 404 ⇒ 首启断在生命周期里，玩家看到的是"页面活着但永远装不上"）。现在 16 行分三段：**对账** —— `bootGraph()` 从 `js/main.js` 顺 `from '…'` 走真实依赖图（本轮实测 13 支），index.html 的每条本地引用、manifest 的每条 icon 与 shortcut 都必须在 SHELL 里，反向亦然（表里每一行都得在盘上、且从发货图或 JS 引用得到，构建期专用的 `js/core/make.js` 因此被请出去）；PNG 走 IHDR 读取，与 manifest 里声明的 `sizes` 逐条比宽度。**真跑** —— 把 `sw.js` 灌进 `node:vm`，手搭 `ServiceWorkerGlobalScope`（`caches`/`clients`/`Request`/`Response`/`fetch` 全部计数桩），断言 install 对全表逐条 `cache.add(…, { cache: 'reload' })`、activate **只**删 `chomp-cos-v1`/`chomp-cos-v2`、在线 fetch 答 `network:` 且 `cache.put` 恰好一次、离线导航退 `cached:index.html`、未缓存子资源答 503、跨源请求一次 `respondWith` 都不许调；再把 13 支模块在 DOM 桩里离线装一遍。**反证两发** —— 从表里删掉 `js/pwa.js`，离线首启必须**只**断在它身上（`dead === ['js/pwa.js']`）；把 fetch 改成缓存优先，在线答案立刻从 `network:js/main.js` 翻成 `cached:js/main.js`。顺带 `js/pwa.js` 本体的三条出口（`file:` / 无 `navigator.serviceWorker` / `https:`）也在 vm 里逐条判，只有最后一条允许真的 `register('sw.js', { scope: './' })` | `rows: 16 fail: 0`；`VERSION` 随表变动从 `chomp-cos-v2` 抬到 `chomp-cos-v3` |
+| 手上落得下口：pointer 优先，**没有 PointerEvent 时 touch/mouse 回落真的能咬** | `node test/input.test.mjs` | 修前 `js/main.js` 只绑 pointer 三路，而 iOS Safari 的 `touchstart` 与任何不支持 Pointer Events 的浏览器都不会合成它 —— 棋盘在那类设备上是一个**看得见咬不动**的画布。9 行按两套环境各跑一遍真的 main.js：`'PointerEvent' in window` 为真时只有 pointer 那三路被绑；把它从桩里删掉（`delete` 而非设为 undefined，否则 `in` 仍为真）后必须是 0 个 pointer 监听 + 4 个 touch（start/move/end/cancel）+ 1 个 mousedown。行为侧：触摸拖拽一口要预览跟随、`cells`/`plies` 真的前进、抬手清预览，且 `defaultPrevented === true`（不 preventDefault 手指会把页面一起滚走）；鼠标一口在 **window** 上松手才算（手指/光标移出棋盘是常态）；右键与 `touches` 为空一律不计费；坐标换算用真的 `getBoundingClientRect` —— 把画布挪到 `(120, 80)` 之后同一个落点仍命中同一格，反证是挪过之后落在画布外那点必须 `pointAt === null` 且一步都不走；触屏路径上 R/P/M 三个键照常（`plies`/`youBites`/`cells` 逐项核对） | `rows: 9 fail: 0` |
+| 减弱动效不是藏在 CSS 里的装饰：系统偏好、存档覆盖、HUD 按钮**三条路都改到行为** | `node test/motion.test.mjs` | 规范 §2 要"设置项可达"，而 `motionOverride` 此前只在 `js/core/storage.js` 里存在、UI 上没有任何入口 —— 一个写不进去也读不出来的设置等于没有设置。本轮 `index.html` 的 HUD 加第四支按钮 `#motion`（跟随系统 → 强制完整 → 强制减弱，label 与 `aria-pressed` 同步、落进存档）。9 行判的是行为不是文案：系统 reduce 开局，一口下去 `emitted` 增量必须为 0、粒子数组为 0、抖屏为 0（同一句在 full 下必须**出**碎屑，否则这条 0 是空跑的 0）；存档覆盖两个方向都压过系统（reduce 系统 + full 存档 ⇒ 有碎屑，反之 ⇒ 无）；`#motion` 三态循环逐格钉 label / `aria-pressed` / `saveRaw().settings.motionOverride` / 行为四件事一致；`MediaQueryList` 的 `change` 就地翻分支（会话中途改系统设置不必重开）；reduce **不等于冻结** —— `simSteps` 与虚拟时钟照推进；开机时 label 从存档画出来。CSS 侧三条钉住 `@media (prefers-reduced-motion: reduce)` 真的砍 animation/transition 时长、`button` 的 44×44 命中区、`viewport-fit=cover` 与 `env(safe-area-inset-top)` 成对出现。**反证**：`window.matchMedia` 整个不存在（老 Safari）时必须不抛且默认走完整动效 | `rows: 9 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源。`--check` 对账四件事：① 期望表 `EXPECTED`（`assets/gen/make_art.py:55`）逐张核 IHDR 宽高；② `color_count` 平色地板 16（`assets/gen/make_art.py:454`）—— 挡掉「不是 0 字节、但也不是画出来的」那种占位；③ `rebuild_all()` 把全套重画进临时目录**连画两遍**，两遍不一致即本机不确定；④ 除 og 卡外逐张比 sha256 与盘上字节，不一致就是手改过或生成器漂移。og 卡排了字、字体就地取材（`FONT_DEPENDENT`，`assets/gen/make_art.py:68`），只对本机确定性负责 —— 这条豁免写在代码与这里，不假装成跨机器字节全等 | 本轮读数 `应存在 18 张 / 盘上在 18 张 / 边长≥180 9 张`、`字节复现 17/17 张与本机重画全等（og 卡本机字体 Arial Bold.ttf 亦字节相同）`、`色值最少的一张 assets/icons/icon-16.png = 188 个`、`指纹 sha256[:12] = acc1d7ed544e`、rc=0。三发阴性对照**全部判红**：icon-512 尾部追加 1 字节 ⇒ `BAD ... 字节不同`；crumb-48 换成纯色块 ⇒ `BAD 只有 1 个不同色值 —— 平色块占位`；apple-touch-icon 换成 120×120 ⇒ `BAD IHDR 120x120，期望 180x180`；三发退出码均为 1 |
 | 页面唯一的入口脚本 `js/main.js` 连同它的整条 ESM 依赖图，在桩环境里真的装得起来（不只是语法对） | `node polish/script/cos_load_sweep.js z-biz-game-chomp-cos` | `npm run check` 只证明可解析；本仓 `index.html` 只有**一支** `<script type="module" src="js/main.js">`，尺子把它交给 node 原生 `import`；而 `js/` 下 14 个模块**一支动态 import 都没有**（`grep -rn "import(" js/` 空），所以这一跑覆盖的是整条静态依赖图，不是只 main.js | 本轮读数 `z-biz-game-chomp-cos \| LOADED`，rc=0。它**不**证明玩法正确，也不代替 §一那条三档对拍 |
-| 33 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **33 个文件**（比上一轮多 `test/domstub.mjs` 与 `test/shell.test.mjs`）；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
+| 36 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **36 个文件**（上一轮 33 个，本轮多出 `test/pwa.test.mjs`、`test/input.test.mjs`、`test/motion.test.mjs` 三支套件）；`.github/workflows/ci.yml:29` 用的是同一个 glob | 打印 `OK`，rc=0 |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本轮实跑过一次取基线，之后按派工单禁跑浏览器线） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:142` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `:145-148` 的 console 断言） | 本轮实测到 HEAD `5670f37` 上这条闸是**红的**：`@play rows: 17 fail: 8`、`@save rows: 3 fail: 2`、`@pointer rows: 22 fail: 7`，每一口都答 `{"rejected":"已暂停","paused":true}`。根因不是玩法，是套件与首启引导脱钩（`29207c1` 让首启 `openTutorial(true)` 把棋盘停住，五套套件都 `nonav` 复用同一页面、从没关过浮层）。已修：套件先按玩家的方式点掉 `#tut-close` 再清档，`@boot` 那行失效的 `c.version === 1`（`js/main.js:19` 早已是 `VERSION = 2`）换成真契约。**修完未复跑**（禁占 CDP），静态验证只有 `node --check` 与四个 scenario 串逐个 `new Function` 编译通过；这条闸的 after 读数留给浏览器线 |
 
 一条命令跑全部 node 侧：
@@ -49,28 +52,31 @@
 npm test          # = npm run check && npm run unit
 ```
 
-本轮原样结论行（十一套各打一行，按 `test/*.test.mjs` 的字母序，`tools/harness.mjs:41`）：
+本轮原样结论行（十四套各打一行，按 `npm run unit` 的 `test/*.test.mjs` 展开顺序，`tools/harness.mjs:41`）：
 
 ```
 rows: 43 fail: 0     # anchor
 rows: 6 fail: 0      # anim
 rows: 13 fail: 0     # book
-rows: 6 fail: 0      # frame   ← 本轮新增：关卡内三档对拍 + 两发变异自检
+rows: 6 fail: 0      # frame   ← 上轮新增：关卡内三档对拍 + 两发变异自检
 rows: 23 fail: 0     # game
+rows: 9 fail: 0      # input   ← 本轮新增：pointer 优先 + touch/mouse 回落，落点带 rect 偏移
 rows: 17 fail: 0     # library
 rows: 25 fail: 0     # model
+rows: 9 fail: 0      # motion  ← 本轮新增：减弱动效三条路（系统/存档/HUD 按钮）都改到行为
+rows: 16 fail: 0     # pwa     ← 本轮新增：预缓存表 × 真实模块图 × vm 里真跑的 SW
 rows: 13 fail: 0     # rng
-rows: 13 fail: 0     # shell   ← 本轮新增：系统控制状态机（暂停/静音/引导/键盘）跑在 DOM 桩里
+rows: 13 fail: 0     # shell   ← 上轮新增：系统控制状态机（暂停/静音/引导/键盘）跑在 DOM 桩里
 rows: 16 fail: 0     # solve
-rows: 16 fail: 0     # storage  ← 本轮新增一行：分段解码的垃圾档实测
+rows: 16 fail: 0     # storage
 ```
 
-**191 是把上面十一行加起来的和**（本轮之前是十行 178，`deliverable.md:16,102,152` 记的是更早的
-165 —— 那是上一轮有人手加之后抄进记录行的，不是判据），仓里没有任何一条**命令**印这个总数，
+**225 是把上面十四行加起来的和**（本轮之前是十一行 191，再之前是十行 178，`deliverable.md:16,102,152`
+记的是更早的 165 —— 那是上一轮有人手加之后抄进记录行的，不是判据），仓里没有任何一条**命令**印这个总数，
 也没有「少跑一套就红」的地板（这条不是省略，是缺口，写在 §七第 2 条）。
-每条数字归属哪个套件，由 `npm run unit` 的字母序循环与套件自己的文件头注释对齐（十行依次是
-anchor 43 / anim 6 / book 13 / frame 6 / game 23 / library 17 / model 25 / rng 13 / solve 16 /
-storage 16）。顺带修正一条旧口径：`node --test test/` **不是**本仓的跑法 —— 这些套件是自跑的
+每条数字归属哪个套件，由 `npm run unit` 的展开顺序与套件自己的文件头注释对齐（十四行依次是
+anchor 43 / anim 6 / book 13 / frame 6 / game 23 / input 9 / library 17 / model 25 / motion 9 /
+pwa 16 / rng 13 / shell 13 / solve 16 / storage 16）。顺带修正一条旧口径：`node --test test/` **不是**本仓的跑法 —— 这些套件是自跑的
 独立脚本（各自 `import { run }` 并 `process.exit`），把目录交给 node 的 test runner 会得到
 `# tests 1 / # pass 0 / # fail 1`（runner 把 `test/` 当成一个失败的子测试，`MODULE_NOT_FOUND`），
 上一轮 README 记的 `tests 9 / pass 9` 在本轮复现不出来，已按实测口径改写。
@@ -85,11 +91,11 @@ storage 16）。顺带修正一条旧口径：`node --test test/` **不是**本�
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit`（`package.json:14`） | **跑过，rc=0**，输出见 §一 |
-| `npm run check` | 上面那条 33 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
-| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十一个文件按字母序，任一非零立即中止 | **跑过**，十一行 `rows: N fail: 0`（合计 191，见 §一） |
+| `npm run check` | 上面那条 36 文件 `node --check` 循环，全过则 `echo OK`（`package.json:12`） | **跑过**，`OK` |
+| `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），十四个文件按字母序，任一非零立即中止 | **跑过**，十四行 `rows: N fail: 0`（合计 225，见 §一） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:59`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
 | `npm run dev` | `node server.cjs 5201`（`package.json:9`）—— 与 `start` **同一个端口**，只是把号写死在 argv 上 | 未跑 |
-| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 十一套 + 真 Chrome 五场景 | 本轮为取基线跑过一次（浏览器部分三套红，根因与修法见 §一那一行与 `ad314a8`）；修完未复跑 |
+| `npm run verify` | `bash tools/verify.sh`（`package.json:15`）：node 十四套 + 真 Chrome 五场景 | 本轮为取基线跑过一次（浏览器部分三套红，根因与修法见 §一那一行与 `ad314a8`）；修完未复跑 |
 | `npm run bake` | `node tools/bake.mjs`（`package.json:11`）：全宇宙判定 + 逐关独立建表 + 两路对账，然后**覆写 `js/data/lots.js`**（`tools/bake.mjs:219-221`） | **本轮未跑**：它会改写发货文件，改 `js/data/lots.js` 不在文档轮的可动范围内。它的结构量由只读路线复现（§五） |
 | `npm run electron` | `electron .`（`package.json:10`），入口 `electron/main.cjs`，它用 `startServer({port: 0})` 自己挑一个临时口（`electron/main.cjs:7-8`） | **跑不了**：`electron` 不在两个依赖表里，仓内也没有 `node_modules/`。本轮未尝试执行 |
 
@@ -128,7 +134,7 @@ UI 里没有任何第二套「合法」的定义。
 
 ## 四、门禁清单：`tools/` 里到底有什么
 
-`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 十套 node 测试在 `test/`（条数见 §一）：
+`tools/` 只有四件东西，其中**没有一套是独立的测试套件** —— 十四套 node 测试在 `test/`（条数见 §一）：
 
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
@@ -147,10 +153,13 @@ UI 里没有任何第二套「合法」的定义。
 被换成了四行新契约（见 §六）。其余四套逐场景仍然对得上。
 但请注意那是**别人那一次的读数 + 本轮的静态点数**，两者都不是本轮实测。
 
-`test/` 十套的条数是本轮实测交回的（§一那张表），逐套内容：
-`anchor 43`（外部锚点）、`book 13`（棋书完整性 + 范围守卫 + 完美性普查 419 全覆盖）、
-`game 23`（状态机、296 个错误首口全量）、`library 17`（发货文件逐关重解 + daily/random 纯度）、
-`model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 16`（存档单调性 + 分段解码的垃圾档实测）。
+`test/` 十四套的条数是本轮实测交回的（§一那张表，合计 225），逐套内容：
+`anchor 43`（外部锚点）、`anim 6`（固定步长与帧率无关，含反证）、`book 13`（棋书完整性 + 范围守卫 +
+完美性普查 419 全覆盖）、`frame 6`（关卡内三档对拍 + 两发变异自检）、`game 23`（状态机、296 个错误首口全量）、
+`input 9`（pointer 优先与 touch/mouse 回落，含 rect 偏移下的落点）、`library 17`（发货文件逐关重解 +
+daily/random 纯度）、`model 25`（形状代数与负例）、`motion 9`（减弱动效三条路都改到行为）、
+`pwa 16`（预缓存表 × 真实模块图 × vm 里真跑的 SW）、`rng 13`（确定性）、`shell 13`（系统控制状态机跑在 DOM 桩里）、
+`solve 16`（三条路线 + 反证）、`storage 16`（存档单调性 + 分段解码的垃圾档实测）。
 
 ---
 
@@ -225,17 +234,20 @@ UI 里没有任何第二套「合法」的定义。
 ## 六、目录结构（真实列出来的）
 
 ```
-index.html                 单 <canvas> 页面 + 面板 + HUD；图标是盘上真 PNG（favicon / apple-touch-icon /
+index.html                 单 <canvas> 页面 + 面板 + HUD（四支系统控制：帮助 / 暂停 / 静音 / 动效，全屏在侧）；
+                           图标是盘上真 PNG（favicon / apple-touch-icon /
                            manifest 三处引用同一批文件），另挂 og 与 twitter 卡片、theme-color、manifest 链接
 manifest.webmanifest       可安装描述（27 行 / 1,440 B）：5 个 icons 全部指向 assets/icons/*.png，
                            id / start_url ./ / scope ./ / display standalone / display_override / orientation /
                            lang / 颜色 / categories / 2 个 shortcuts
-sw.js                      同名带版本缓存 chomp-cos-v2（92 行）：同源子资源**网络优先**（缓存优先 + 手写
-                           版本号会把旧 JS 永久钉死），activate 删掉一切非当前版本的缓存，离线时导航退回 index.html
+sw.js                      同名带版本缓存 chomp-cos-v3（97 行 / 3,074 B，SHELL 29 行）：同源子资源**网络优先**（缓存优先 + 手写
+                           版本号会把旧 JS 永久钉死），activate 删掉一切非当前版本的缓存，离线时导航退回 index.html；
+                           表与真实模块图由 `test/pwa.test.mjs` 逐条对账（本轮补齐缺的 6 行、请出构建期的 make.js）
 js/pwa.js                  注册器（31 行）：file:// 与非浏览器环境静默跳过并回报理由，不抛未捕获异常
 css/game.css               样式（183 行 / 8,203 B）：safe-area env() 内缩、button 44×44 命中区、
                            暂停幕布、模态、kbd，以及真的 @media (prefers-reduced-motion: reduce)
-js/main.js                 装配层：DOM、路由、存档、暂停/静音/全屏/教学/键盘光标，`window.chomp` 那张闸用的脸
+js/main.js                 装配层：DOM、路由、存档、暂停/静音/动效/全屏/教学/键盘光标，输入是 pointer 优先 +
+                           touch/mouse 回落（`HAS_POINTER` 一处分支），`window.chomp` 那张闸用的脸
 js/view.js                 canvas 绘制 + 手势几何 + rAF 外壳（cellPoint / pointAt / clampToBar / goneSquares /
                            start / stop / setPaused / spriteReport）
 js/core/anim.js            固定步长模拟（150 行）：SIM_STEP=1/120、MAX_STEPS=20、种子 LCG；`advance` 是 dt 唯一入口
@@ -262,7 +274,11 @@ tools/harness.mjs          微型框架（node 与浏览器同形输出）
 tools/bake.mjs             构建期出题 + 两条路线对账 + 写盘前 round-trip（会覆写 js/data/lots.js）
 tools/playtest.mjs         裸 CDP 驱动 + 四套页内场景 + 一套真鼠标场景（561 行 / 35,652 B）
 tools/verify.sh            浏览器闸的生命周期（判据只有「有没有 fail 行」与「console 干不干净」）
-test/*.test.mjs            十套 node 套件（anchor anim book frame game library model rng solve storage）
+test/*.test.mjs            十四套 node 套件（anchor anim book frame game input library model
+                           motion pwa rng shell solve storage）
+test/domstub.mjs           最小浏览器桩（260 行）：元素/事件/localStorage/AudioContext/Image/rAF 计数桩 +
+                           真 matchMedia（可按 query 翻转并派发 change）；shell / input / motion 三套共用，
+                           它们判的都是真 `import` 进来的发货 `js/main.js`
 test/fixture.mjs           手算期望值（12 条 fixture + 两行阶梯 + 单行向量），被 anchor/solve 引用
 test/naive.mjs             第三份独立实现的枚举与无记忆化暴力递归，测试专用
 .github/workflows/ci.yml   unit + browser 两个 job（browser 跑 SKIP_UNIT=1 / WD_TIMEOUT=240）

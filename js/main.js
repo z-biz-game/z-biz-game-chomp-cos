@@ -18,7 +18,7 @@ import { createView } from './view.js';
 
 const VERSION = 2;
 const el = {};
-for (const id of ['board', 'hintline', 'curtain', 'stars', 'verdict', 'tally', 'again', 'next', 'crumbs', 'readout', 'hint', 'undo', 'restart', 'share', 'modes', 'totals', 'proof', 'proofcount', 'proofmore', 'wipe', 'toast', 'help', 'pause', 'mute', 'fullscreen', 'tutorial', 'tut-close', 'pausecard', 'pausesim', 'resume', 'pauserestart']) {
+for (const id of ['board', 'hintline', 'curtain', 'stars', 'verdict', 'tally', 'again', 'next', 'crumbs', 'readout', 'hint', 'undo', 'restart', 'share', 'modes', 'totals', 'proof', 'proofcount', 'proofmore', 'wipe', 'toast', 'help', 'pause', 'mute', 'motion', 'fullscreen', 'tutorial', 'tut-close', 'pausecard', 'pausesim', 'resume', 'pauserestart']) {
   el[id] = document.getElementById(id);
 }
 
@@ -489,6 +489,33 @@ if (motionQuery) {
   else if (typeof motionQuery.addListener === 'function') motionQuery.addListener(onChange);
 }
 
+// The OS preference is only the default. A player who gets motion sick on a train should be able
+// to force the reduced branch from inside the game, and a player who wants the crumbs should be
+// able to keep them, so this button walks 跟随系统 → 强制完整 → 强制减弱 and the answer is saved
+// with the rest of the settings (js/core/storage.js:155 `setMotionOverride`).
+const MOTION_ORDER = [null, 'full', 'reduce'];
+const MOTION_TEXT = { system: '动效 自动', full: '动效 全', reduce: '动效 减弱' };
+
+function syncMotionLabel() {
+  const which = store.settings.motionOverride;
+  el.motion.textContent = which === 'full' ? MOTION_TEXT.full : which === 'reduce' ? MOTION_TEXT.reduce : MOTION_TEXT.system;
+  el.motion.setAttribute('aria-pressed', String(which === 'reduce'));
+  return which;
+}
+
+function cycleMotion() {
+  const next = MOTION_ORDER[(MOTION_ORDER.indexOf(store.settings.motionOverride) + 1) % MOTION_ORDER.length];
+  store.setMotionOverride(next);
+  const on = syncMotion();
+  syncMotionLabel();
+  flash(next === null ? `动效跟随系统：当前${on ? '减弱' : '完整'}`
+    : next === 'reduce' ? '动效已强制减弱：碎屑、抖动、呼吸全部停下' : '动效已强制完整');
+  render();
+  return next;
+}
+
+el.motion.addEventListener('click', cycleMotion);
+
 el.hint.addEventListener('click', () => {
   const st = game.match;
   if (st.status !== 'playing') return;
@@ -642,6 +669,7 @@ window.addEventListener('keydown', onKeyDown);
 // preference, and whether this device has ever been shown the rules.
 applyMute(store.settings.muted, { persist: false });
 syncMotion();
+syncMotionLabel();
 if (!store.settings.seenTutorial) openTutorial(true);
 installWhenReady().then((r) => { pwaStatus = r; });
 
