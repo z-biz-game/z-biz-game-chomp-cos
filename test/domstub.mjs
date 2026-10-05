@@ -27,6 +27,13 @@ let cache = new Map();
 let rafQueue = [];
 let clock = 1000; // 沙箱时钟从 1000ms 起：从 0 起步会被 view.js 的 `lastTime === 0` 哨兵吃掉一帧
 let osc = 0;
+// 画布在页面上的位置与尺寸：input 那套件靠它证明「clientX 减掉 rect.left」这一步真的做了。
+let RECT = { left: 0, top: 0, width: 800, height: 600 };
+export const setRect = (patch = {}) => { RECT = { ...RECT, ...patch }; };
+const rectOf = () => ({
+  left: RECT.left, top: RECT.top, right: RECT.left + RECT.width, bottom: RECT.top + RECT.height,
+  width: RECT.width, height: RECT.height, x: RECT.left, y: RECT.top,
+});
 
 const ctx2d = new Proxy({ canvas: null }, {
   get: (o, k) => {
@@ -58,7 +65,7 @@ function makeEl(id, tag = 'DIV') {
     setAttribute(k, v) { this._attr[k] = String(v); }, getAttribute(k) { return k in this._attr ? this._attr[k] : null; },
     removeAttribute(k) { delete this._attr[k]; }, hasAttribute(k) { return k in this._attr; },
     focus() {}, blur() {}, select() {}, scrollIntoView() {}, closest() { return null; }, contains() { return false; },
-    getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600, x: 0, y: 0 }),
+    getBoundingClientRect: rectOf,
     getClientRects() { return []; },
     querySelector: () => makeEl('q'), querySelectorAll: () => [],
     append(...n) { this.children.push(...n); }, appendChild(c) { this.children.push(c); return c; },
@@ -145,6 +152,7 @@ const env = {
   dispatchEvent: (ev) => { for (const f of (winH[ev.type] || []).slice()) f(ev); return true; },
   getComputedStyle: () => ({ getPropertyValue: () => '' }),
   AudioContext: AudioContextStub, webkitAudioContext: AudioContextStub, Image: ImageStub, Audio: ImageStub,
+  PointerEvent: class PointerEvent { constructor(type, init = {}) { this.type = type; Object.assign(this, init); } },
   Path2D: class { addPath() {} moveTo() {} lineTo() {} arc() {} rect() {} closePath() {} },
   ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
   IntersectionObserver: class { observe() {} unobserve() {} disconnect() {} },
@@ -164,8 +172,35 @@ Object.defineProperty(g, 'global', { value: g, writable: true, configurable: tru
 /** 清掉元素/事件桩，让下一次 boot 拿到干净的一套监听器（同一进程里装第二个 main.js 实例时用）。 */
 export function resetDom() {
   winH = Object.create(null); docH = Object.create(null); cache = new Map(); rafQueue = [];
+  RECT = { left: 0, top: 0, width: 800, height: 600 };
 }
 export const byId = (i) => document.getElementById(i);
+/** 某个元素上挂了几支某类监听器 —— 「回落不许和 pointer 同时绑」就靠它取证。 */
+export const listeners = (id, type) => ((byId(id)._h || {})[type] || []).length;
+/** 关掉 PointerEvent 要用 delete：留一个 undefined 值的话 `'PointerEvent' in window` 仍为真。 */
+export function setPointerSupport(on) {
+  if (on) Object.defineProperty(g, 'PointerEvent', { value: env.PointerEvent, writable: true, configurable: true });
+  else delete g.PointerEvent;
+}
+/** 派发一支真形状的 touch 事件：坐标在 touches[0] 上，抬手类走 changedTouches。 */
+export function touch(id, type, x, y) {
+  const e = byId(id);
+  const t = { clientX: x, clientY: y, pageX: x, pageY: y, identifier: 1, target: e };
+  const lifted = type === 'touchend' || type === 'touchcancel';
+  return e.dispatch(type, { touches: lifted ? [] : [t], changedTouches: [t], target: e, type });
+}
+export function winDispatch(type, extra = {}) {
+  const ev = mkEvent(type, extra);
+  for (const f of (winH[type] || []).slice()) f(ev);
+  return ev;
+}
+/** `id` 给 null 时打到 window 上（鼠标回落的 move/up 就绑在那儿）。 */
+export function mouse(id, type, x, y, button = 0) {
+  const extra = { clientX: x, clientY: y, button, type };
+  if (id === null) return winDispatch(type, extra);
+  const e = byId(id);
+  return e.dispatch(type, { ...extra, target: e });
+}
 export function key(k, extra = {}) {
   const ev = mkEvent('keydown', { key: k, target: document.body, ...extra });
   for (const f of (winH.keydown || []).slice()) f(ev);

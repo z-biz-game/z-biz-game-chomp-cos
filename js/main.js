@@ -275,6 +275,61 @@ function onPointerUp(ev) {
   commit(anchor);
 }
 
+// Pointer Events are the primary path and the only one on a modern engine. The adapters below
+// exist because an engine without them (iOS Safari < 13, some in-app webviews) would otherwise
+// find the board stone cold: a finger there produces touch*/mouse* and nothing else. They reuse
+// the handlers above verbatim by handing over a plain {clientX, clientY} point, so the geometry,
+// the refused poison square and the drag state machine stay one code path, not two.
+const HAS_POINTER = typeof window !== 'undefined' && 'PointerEvent' in window;
+
+function touchPoint(ev) {
+  const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]);
+  return t ? { clientX: t.clientX, clientY: t.clientY } : null;
+}
+
+function onTouchStart(ev) {
+  const p = touchPoint(ev);
+  if (!p) return;
+  ev.preventDefault();   // no page scroll and no ghost click under the finger
+  onPointerDown(p);
+}
+
+function onTouchMove(ev) {
+  const p = touchPoint(ev);
+  if (!p) return;
+  ev.preventDefault();
+  onPointerMove(p);
+}
+
+function onTouchEnd(ev) {
+  const p = touchPoint(ev) || { clientX: 0, clientY: 0 };
+  ev.preventDefault();
+  onPointerUp(p);
+}
+
+function onTouchCancel() {
+  game.dragging = false;
+  game.preview = null;
+  view.draw();
+}
+
+// A mouse has no cancel, and the release can land anywhere on the page: down on the canvas,
+// move/up on the window.
+function onMouseDown(ev) {
+  if (ev.button !== undefined && ev.button !== 0) return;
+  onPointerDown(ev);
+}
+
+function onMouseMove(ev) {
+  if (!game.dragging) return;
+  onPointerMove(ev);
+}
+
+function onMouseUp(ev) {
+  if (!game.dragging) return;
+  onPointerUp(ev);
+}
+
 // The view is built before the first `load()`, and `resize()` measures and paints immediately,
 // so the accessor has to answer with the campaign's opening bar rather than crash on a null
 // match. That is boot order, not a game rule: `load()` overwrites both fields a few lines later.
@@ -289,10 +344,22 @@ const view = createView(el.board, () => ({
   status: game.match.status,
 }));
 
-el.board.addEventListener('pointerdown', onPointerDown);
-el.board.addEventListener('pointermove', onPointerMove);
-el.board.addEventListener('pointerup', onPointerUp);
-el.board.addEventListener('pointercancel', () => { game.dragging = false; game.preview = null; view.draw(); });
+if (HAS_POINTER) {
+  // A modern engine synthesises mouse and touch *from* pointer events, so binding both families
+  // would bite twice per gesture. Pointer only, here.
+  el.board.addEventListener('pointerdown', onPointerDown);
+  el.board.addEventListener('pointermove', onPointerMove);
+  el.board.addEventListener('pointerup', onPointerUp);
+  el.board.addEventListener('pointercancel', onTouchCancel);
+} else {
+  el.board.addEventListener('touchstart', onTouchStart);
+  el.board.addEventListener('touchmove', onTouchMove);
+  el.board.addEventListener('touchend', onTouchEnd);
+  el.board.addEventListener('touchcancel', onTouchCancel);
+  el.board.addEventListener('mousedown', onMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+}
 window.addEventListener('resize', () => view.resize());
 
 view.setAnim(anim);
