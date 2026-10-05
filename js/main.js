@@ -372,14 +372,20 @@ document.addEventListener('fullscreenchange', () => setFullscreenPressed(!!docum
 
 // The tutorial: openable at any time with H or ?, and shown once per device because the save
 // file remembers. A player who has already bitten something never gets it pushed at them again.
+let pausedByTutorial = false;
+
 function openTutorial(on) {
   el.tutorial.hidden = !on;
   if (on) {
     el['tut-close'].focus();
-    setPaused(true); // the board waits while the rules are on screen
+    // Only claim "I parked this board" when it was actually running: a player who paused on
+    // purpose before reading the rules must get that pause back, not a live board.
+    pausedByTutorial = !game.paused;
+    if (pausedByTutorial) setPaused(true);
   } else {
     store.markTutorialSeen();
-    if (game.paused) setPaused(false);
+    if (pausedByTutorial) setPaused(false);
+    pausedByTutorial = false;
   }
   return on;
 }
@@ -546,7 +552,9 @@ function onKeyDown(ev) {
       ev.preventDefault();
       break;
     }
-    case 'p': case 'P': setPaused(!game.paused); break;
+    // With the rules on screen the board is already parked by the modal; P must not run it
+    // underneath an overlay the player cannot see past.
+    case 'p': case 'P': if (el.tutorial.hidden) setPaused(!game.paused); break;
     case 'r': case 'R': el.restart.click(); break;
     case 'm': case 'M': toggleMute(); break;
     case 'f': case 'F': toggleFullscreen(); break;
