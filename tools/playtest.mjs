@@ -183,7 +183,7 @@ async function pointerScenario(cdp, sessionId, runJS) {
   };
   const S = () => runJS('JSON.stringify(window.chomp.state)');
 
-  await runJS('(() => { const c = window.chomp; c.store.reset(); c.load("#/lot/shoal-01"); return 1; })()');
+  await runJS('(() => { const c = window.chomp; ' + LIVE + ' c.store.reset(); c.load("#/lot/shoal-01"); return 1; })()');
   let fresh = null;
   for (let i = 0; i < 40; i++) {
     await sleep(80);
@@ -333,13 +333,33 @@ async function pointerScenario(cdp, sessionId, runJS) {
 }
 
 // ---- in-page suites: each returns { rows: [{ test, pass, detail }] } --------
+// A first visit boots into the rules modal, and that modal parks the board (js/main.js
+// openTutorial -> setPaused). Every suite that needs a live board dismisses it the way a player
+// does — clicking the real #tut-close — instead of poking setPaused(false): that keeps the modal's
+// own contract (open => parked, close => live) on the critical path of all five suites, so a
+// future modal that forgets to hand the board back turns these rows red instead of silently
+// making every bite answer "已暂停" (which is exactly how this suite went red once).
+const LIVE = 'if (!document.getElementById("tutorial").hidden) document.getElementById("tut-close").click();';
+
 const SCENARIOS = {
   boot: `(async () => {
     const rows = [];
     const rec = (name, pass, detail) => rows.push({ test: name, pass: !!pass, detail: detail === undefined ? null : JSON.parse(JSON.stringify(detail ?? null)) });
     window.__lastRows = rows;
     const c = window.chomp;
-    rec('the shell boots straight into a game', c && c.version === 1 && c.state.id && c.state.mode === 'campaign', c && c.state);
+    rec('first visit boots into the rules modal, with the board parked behind it',
+      !!c && typeof c.version === 'number' && !!c.state.id && c.state.mode === 'campaign'
+      && c.state.paused === true && !document.getElementById('tutorial').hidden,
+      { version: c && c.version, paused: c && c.state.paused, id: c && c.state.id });
+    document.getElementById('tut-close').click(); await new Promise((r) => setTimeout(r, 60));
+    const bootLot = c.state.id;
+    const mv = c.legal().find((m) => !(m.r === 0 && m.c === 0)) || c.legal()[0];
+    const probe = c.tap(mv.r, mv.c);
+    rec('closing the modal hands a live board back (a legal bite goes through)',
+      c.state.paused === false && document.getElementById('tutorial').hidden === true && !probe.rejected,
+      { paused: c.state.paused, hidden: document.getElementById('tutorial').hidden, move: mv, rejected: probe.rejected || null });
+    // 这一探针真咬了一口，而后面的行读的是"开局局面"的判定 —— 把局面还回去再往下测。
+    c.load('#/lot/' + bootLot); await new Promise((r) => setTimeout(r, 140));
     const cv = document.getElementById('board');
     rec('the canvas has real pixels (not the 300x150 default)', cv.width > 0 && cv.height > 0 && !!cv.getContext('2d'), { w: cv.width, h: cv.height });
     rec('devicePixelRatio is honoured', cv.width >= cv.getBoundingClientRect().width, { dpr: c.view.metrics().dpr, w: cv.width, css: cv.getBoundingClientRect().width });
@@ -389,6 +409,7 @@ const SCENARIOS = {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const D = (id) => document.getElementById(id);
     const c = window.chomp;
+    ${LIVE}
     c.store.reset();
     c.load('#/lot/shoal-01'); await sleep(140);
     const lot = c.lot();
@@ -458,6 +479,7 @@ const SCENARIOS = {
     window.__lastRows = rows;
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const c = window.chomp;
+    ${LIVE}
     c.store.reset();
 
     c.load('#/c/7'); await sleep(120);
@@ -510,6 +532,7 @@ const SCENARIOS = {
     const c = window.chomp;
     const KEY = 'chomp.save.v1';
 
+    ${LIVE}
     c.store.reset();
     c.load('#/lot/shoal-01'); await sleep(140);
     rec('a wiped save is empty', Object.keys(c.store.records).length === 0 && c.store.unlocked === 1 && localStorage.getItem(KEY) === null, { unlocked: c.store.unlocked });
