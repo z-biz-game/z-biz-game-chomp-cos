@@ -26,9 +26,9 @@ jobs:
         with:
           node-version: 22
       - name: Syntax
-        run: for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f"; done
+        run: npm run check
       - name: Suites
-        run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+        run: npm run unit
       # The documentation gate, byte for byte the command a contributor runs locally
       # (`npm run doctest`). It re-runs the nine suites itself, so the floor in verify.sh and the
       # numbers printed here are the same measurement.

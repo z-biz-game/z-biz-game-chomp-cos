@@ -218,7 +218,7 @@ const CI = read('.github/workflows/ci.yml');
 const PG = JSON.parse(read('package.json'));
 const MIN_LOGIC = Number((VS.match(/MIN_LOGIC_ROWS=\$\{MIN_LOGIC_ROWS:-(\d+)\}/) || [])[1]);
 const CHECK_GLOB = PG.scripts.check.match(/for f in (.+?); do/)[1];
-const CI_SYNTAX = (CI.match(/- name: Syntax\n\s+run: for f in (.+?); do/) || [])[1];
+const CI_CALLS_LEGS = /- name: Syntax\n\s+run: npm run check\b/.test(CI) && /- name: Suites\n\s+run: npm run unit\b/.test(CI);
 const checkRun = spawnSync('/bin/bash', ['-c', `for f in ${CHECK_GLOB}; do node --check "$f" || exit 1; done && echo OK`], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
 const CHECK_FILES = spawnSync('/bin/bash', ['-c', `for f in ${CHECK_GLOB}; do echo "$f"; done`], { cwd: ROOT, encoding: 'utf8' }).stdout.trim().split('\n').length;
 
@@ -371,7 +371,7 @@ for (const r of scriptRows) {
   ok(!!PG.scripts[key] && PG.scripts[key] === docCmd, 'D4 npm 脚本的实际命令与 README 抄的逐字相同', `${key} · package.json 里是 ${JSON.stringify(PG.scripts[key])}`);
 }
 eq(Object.keys(PG.scripts).length, scriptRows.length, 'D4 README 那张表覆盖 package.json 的每一条 script（加一条脚本就要多一行表）', `${Object.keys(PG.scripts).length} 条 script / 表里 ${scriptRows.length} 条`);
-ok(CHECK_GLOB === CI_SYNTAX, 'D4 npm run check 的 glob 与 ci.yml Syntax 那一步逐字相同', CHECK_GLOB);
+ok(CI_CALLS_LEGS, 'D4 ci.yml 的 Syntax/Suites 两步直接调 `npm run check` / `npm run unit`（抄一份 inline glob 就是第二份真相：leg 改了 CI 不会跟着红）', `ci.yml:${lineOf('.github/workflows/ci.yml', /run: npm run check/)}+${lineOf('.github/workflows/ci.yml', /run: npm run unit/)}`);
 eq(CHECK_FILES, Number((README.match(/本轮实测展开成 \*\*(\d+) 个文件\*\*/) || [])[1]), 'D4 check 的 glob 现在展开成多少个文件 == README 写的数');
 eq(`${checkRun.status} ${/OK/.test(checkRun.stdout || '')}`, '0 true', 'D4 真跑一遍那条 node --check 循环：rc=0 且打印 OK');
 eq(JSON.stringify([PG.dependencies, PG.devDependencies]), '[{},{}]', 'D4 两个依赖表都还是 {}（零依赖这条承诺）');
