@@ -494,7 +494,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:788'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:794'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
@@ -690,6 +690,8 @@ for (const r of ledger) {
 // 另计。拿不到名字的裸 `path:NN` 这一组一条都不核，那部分仍只过范围检查——这条腿没覆盖什么写在
 // README §七，不在这段注释里含糊过去。
 const ANCHOR_CITE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css)):(\d+)(?:-(\d+))?$/;
+// 还有一种写法把行号和名字装在同一个反引号里（`x.js:82 的 EXPECTS`），它也是一张锚点。
+const ANCHOR_INLINE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css)):(\d+)(?:-(\d+))?\s*(?:的|::)\s*([^`]+)$/;
 const IDENT = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
 const anchorTok = (body) => {
   const seg = body.includes('::') ? body.slice(body.lastIndexOf('::') + 2) : body;
@@ -705,9 +707,11 @@ const deriveAnchors = (text) => {
   const seen = new Set();
   let mentions = 0;
   for (let i = 0; i < spans.length; i += 1) {
-    const c = ANCHOR_CITE.exec(spans[i][1]);
+    const plain = ANCHOR_CITE.exec(spans[i][1]);
+    const inline = plain ? null : ANCHOR_INLINE.exec(spans[i][1]);
+    const c = plain || inline;
     if (!c) continue;
-    let name = '';
+    let name = inline ? anchorTok(inline[4].trim()) : '';
     const nxt = spans[i + 1];
     if (nxt) {
       const gap = text.slice(spans[i].index + spans[i][0].length, nxt.index);
@@ -735,7 +739,9 @@ const anchorDrift = (list) => list.filter((d) => {
   const s = src(d.file);
   if (!s) return true;
   if (d.from < 1 || d.to > s.length) return true;
-  return !s.slice(d.from - 1, d.to).join('\n').includes(d.name);
+  const body = s.slice(d.from - 1, d.to).join('\n');
+  // 整词认：`EXPECT` 坐在 `EXPECTS` 里不算命中，名字少抄一个字母也是漂。
+  return !new RegExp(`(^|[^A-Za-z0-9_$])${d.name.replace(/[$.]/g, '\\$&')}($|[^A-Za-z0-9_$])`).test(body);
 });
 const derived = deriveAnchors(DOCTEXT);
 const drift = anchorDrift(derived.anchors);
