@@ -494,7 +494,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:794'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:829'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
@@ -518,21 +518,40 @@ for (const [f, re, token] of CITES) {
   ok(got === want && inDoc, 'D6 文档引用的那一行号仍指回原来那段代码', `${f}:${ref} → 现在数到 :${got}${inDoc ? '' : '，且文档里已找不到这个引用'}`);
 }
 ok(citeBad.length === 0, 'D6a 上面那张引用清单里没有被改动过的行号', citeBad.join(' / ') || '全部命中');
+// 范围那一道与空行那一道抽成同一个函数，是因为下面那把空行刀要走**同一条代码路径**：把空行那一道
+// 从这里删掉，仓里那些行号引用照样全绿，只有这一把刀会立刻红——否则新加的那道查就是一张没有对照的等式。
+const citeMiss = (name, file, fromRaw, toRaw) => {
+  const label = `${file}:${fromRaw}${toRaw ? `-${toRaw}` : ''}`;
+  const s = src(file === name ? name : file);
+  const from = Number(fromRaw);
+  const to = Number(toRaw || fromRaw);
+  if (!s) return `${name} 里引用了仓外的 ${file}:${fromRaw}`;
+  if (to > s.length - 1) return `${label} 越界（${file} 只有 ${s.length - 1} 行）`;
+  // 「在界内」从来不等于「指到了代码」：句子里没贴名字的裸引用不核锚点（D13 那段写明它一条都不核），
+  // 只过这一道查，所以整段空白必须在这里红——不然它指着的只是一片行距，两道查都会放它过。
+  if (s.slice(from - 1, to).join('').trim() === '') return `${label} 那几行整段是空行`;
+  return '';
+};
 const rangeBad = [];
 let citeTotal = 0;
 for (const [name, text] of Object.entries(DOCS)) {
   for (const m of all(text, /`?([A-Za-z0-9_./-]+\.(?:js|mjs|cjs|sh|py|html|json|yml|md|webmanifest))`?:([0-9]+)(?:-([0-9]+))?/g)) {
     citeTotal += 1;
-    const f = m[1];
-    const n = Number(m[2]);
-    const e2 = Number(m[3] || m[2]);
-    const s = src(f === name ? name : f);
-    if (!s) { rangeBad.push(`${name} 里引用了仓外的 ${f}:${m[2]}`); continue; }
-    if (e2 > s.length - 1) rangeBad.push(`${f}:${m[2]}-${e2} 越界（${f} 只有 ${s.length - 1} 行）`);
+    const miss = citeMiss(name, m[1], m[2], m[3]);
+    if (miss) rangeBad.push(miss);
   }
 }
 ok(citeTotal >= 110, `D6b 三份文档共有 ${citeTotal} 处行号引用，全部纳入范围校验（少一批就是引用被成段删了）`, `${citeTotal} 处`);
-ok(rangeBad.length === 0, 'D6c 每一处行号引用都还在文件长度之内，且没有指向仓外的路径', rangeBad.slice(0, 6).join(' / ') || '无越界');
+// 反空转的刀：空行靶子的**行号现量**（本闸自己这份文件的第一处空行），不写死——写死的那个数会在
+// 有人把那一行填上之后悄悄地不再测任何东西，`blankAt` 量不出靶子的那一天就是这一格红的那一天。
+const ownLines = src('tools/doctest.mjs') || [];
+let blankAt = 0;
+for (let i = 1; i < ownLines.length - 1; i += 1) if (String(ownLines[i]).trim() === '') { blankAt = i + 1; break; }
+const blankKnife = blankAt ? citeMiss('tools/doctest.mjs', 'tools/doctest.mjs', String(blankAt), null) : '';
+ok(rangeBad.length === 0 && !!blankKnife, 'D6c 每一处行号引用都还在文件长度之内、没有指向仓外的路径，且被指的那几行整段不许是空行（这一格自己带一把指向空行的刀）',
+  rangeBad.length ? rangeBad.slice(0, 6).join(' / ')
+    : blankKnife ? `${citeTotal} 处无越界 · 刀：量得本闸自己那份文件第 ${blankAt} 行整段是空白，指过去判红「${blankKnife.slice(blankKnife.indexOf(' ') + 1)}」`
+      : '本闸自己的文件里量不出空行靶子 —— 空行那一道没被证明过');
 
 // ================================================================ D7 逐字文案、常量与文件规格
 const msgs = [
@@ -745,9 +764,25 @@ const anchorDrift = (list) => list.filter((d) => {
 });
 const derived = deriveAnchors(DOCTEXT);
 const drift = anchorDrift(derived.anchors);
-ok(drift.length === 0, 'D13 从文档现推的每一个锚点都坐在被指的那几行里（行号往旁边挪两行仍然在文件里，范围那条腿看不见这件事）',
+// 这一格自带一把截前缀的对照刀，走的正是上面那条整词比较：从现推锚点里挑一条，把它的名字削掉最后一格，
+// 要求削出来的串仍然是被指那几行的**子串**、却不再是一个完整标识符（`EXPECT_ROWS` 那一行永远"含"
+// `EXPECT_ROW`），整词必须判它漂。口径哪天退回 `.includes`，那一天正是所有候选都被判"过"、这把刀挑不出
+// 漂的日子——所以挑不出就当场红，不许静默跳过：文档里那句「认整词」从此是闸能自证的事，不是承诺。
+const prefixKnife = (() => {
+  for (const d of derived.anchors) {
+    const s = src(d.file);
+    if (!s) continue;
+    const body = s.slice(d.from - 1, d.to).join('\n');
+    const cut = d.name.slice(0, -1);
+    if (cut.length < 3 || !body.includes(d.name) || !body.includes(cut)) continue;
+    if (anchorDrift([{ ...d, name: cut }]).length === 1) return { d, cut };
+  }
+  return null;
+})();
+ok(drift.length === 0 && !!prefixKnife, 'D13 从文档现推的每一个锚点都坐在被指的那几行里（行号往旁边挪两行仍然在文件里，范围那条腿看不见这件事；比对认整词不认子串，这一格自己带一把截前缀的刀）',
   drift.length ? `漂 ${drift.length} 处：${drift.slice(0, 8).map((d) => `${d.label} 里找不到 ${d.name}`).join('，')}`
-               : `现推 ${derived.anchors.length} 条（另有 ${derived.mentions - derived.anchors.length} 次是同一处的重复提及），全部落回原处；最窄的八条 ${[...derived.anchors].sort((a, b) => (a.to - a.from) - (b.to - b.from)).slice(0, 8).map((d) => `${d.label}=${d.name}`).join(' ')}`);
+               : prefixKnife ? `现推 ${derived.anchors.length} 条（另有 ${derived.mentions - derived.anchors.length} 次是同一处的重复提及），全部落回原处；最窄的八条 ${[...derived.anchors].sort((a, b) => (a.to - a.from) - (b.to - b.from)).slice(0, 8).map((d) => `${d.label}=${d.name}`).join(' ')} · 刀：${prefixKnife.d.label} 的 ${prefixKnife.d.name} 截成 ${prefixKnife.cut}，子串在、整词判漂`
+                 : '现推锚点里截不出前缀靶子 —— 整词那一道没被证明过');
 ok(derived.anchors.length >= 18, 'D13a 现推锚点的条数地板（引用格式改了、或带名字的写法被删光，这一条先红，不给后面变成空转绿）',
   `现推 ${derived.anchors.length} 条 / 文档一共 ${citeTotal} 处 ` +
   `path:NN 引用，其中 ${citeTotal - derived.mentions} 处是不带名字的裸引用`);
