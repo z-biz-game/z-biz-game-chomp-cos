@@ -200,7 +200,7 @@ UI 里没有任何第二套「合法」的定义。
 | S12 | 闸自己的组数地板被调低（13 → 12） | `tools/doctest.mjs` | `emitted.size === 13` | `emitted.size === 12` | D12a 这道闸自己是十三组 | 1 |
 | S13 | `node --test` 少派生一套（九支文件名被削成八支） | `tools/doctest.mjs` | `...SUITE_FILES.map((f) =>` | `...SUITE_FILES.slice(0, 8).map((f) =>` | D3 node --test 跑 SUITE_FILES 派生的那九支 | 1 |
 | S14 | 壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天） | `tools/playtest.mjs` | `c.version === Number('${SHELL_VERSION}')` | `c.version === 1` | D3 @boot 的壳层版本仍从 js/main.js 的常数派生 | 1 |
-| S15 | 文档把拒绝时改写的字段名写成 `lines`，行号仍指在原处 | `README.md` | `只换 `line`（`js/core/game.js:88`）` | `只换 `lines`（`js/core/game.js:88`）` | D13 从文档现推的每一个锚点都坐在被指的那几行里 | ? |
+| S15 | 文档把拒绝时改写的字段名写成 `lines`，行号仍指在原处 | `README.md` | `只换 `line`（`js/core/game.js:88`）` | `只换 `lines`（`js/core/game.js:88`）` | D13 从文档现推的每一个锚点都坐在被指的那几行里 | 1 |
 
 ---
 
