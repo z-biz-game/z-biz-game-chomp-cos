@@ -36,12 +36,12 @@
 | 位置模型的物理不变式：非增行长向量（序理想），悬空的格子不存在 | `node test/model.test.mjs` | `validateShape` 的四组负例（空向量 / 非增 / 0 与负长度 / 非整数与非数组，`test/model.test.mjs:23-44`）+ `applyBite` 对宇宙逐口仍产出合法形状（下限断言 `n > 500` 条边在 `test/model.test.mjs:171`，实测到的边数只在失败时打印）+ 闭包数 == 序理想计数 == 矩形闭式 `C(r+w,r)-1`（`test/model.test.mjs:158-188`） | `rows: 25 fail: 0` |
 | 求解器自洽，且**三条独立路线**给出同一张判定表 | `node test/solve.test.mjs` | 每关独立表 vs 全宇宙自底向上 vs `test/naive.mjs` 那份独立重写的枚举，419 个局面逐点一致（`test/solve.test.mjs:110-138`）；反证：去掉毒格规则后整张表翻成全 N | `rows: 16 fail: 0` |
 | 每日一题与分享链接在任何设备上落同一根巧克力 | `node test/rng.test.mjs` | `hashSeed` 是纯函数、是 FNV-1a **派生**的两轮 UTF-16 混合（对 6 个 ASCII 种子逐个证明与教科书 FNV-1a 不同，`test/rng.test.mjs:57-66`）；日期→种子→池内下标链路跨进程一致 | `rows: 13 fail: 0` |
-| 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()` 必须**抛** `StorageError` 而不是回 `null`（`js/core/storage.js:21-25`） | `rows: 15 fail: 0` |
+| 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()`（`js/core/storage.js:21-25`）必须**抛** `StorageError` 而不是回 `null` | `rows: 15 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a`。**本机没有 Pillow**（`python3 -c "import PIL"` 报 ModuleNotFoundError），所以这条 `python3` 命令本轮跑不起来 —— 这一格的四项读数与指纹是 `node tools/doctest.mjs` 的 D7 组在 node 里读 IHDR 现量交回的（读 `make_art.py` 的期望表 + 对 `assets/` 逐张 sha256），不是引用旧文档；把这条命令补成能跑不在本轮的可动范围里，写在这里是缺陷而不是省略 | 应存在 18 张 / 缺失 0 / 0字节 0 / 边长≥180 9 张，指纹 `sha256[:12] = 3f8bac3be94a` |
 | 35 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12`），本轮实测展开成 **35 个文件**；`.github/workflows/ci.yml:29` 不再抄这份 glob，Syntax/Suites 两步直接调 `npm run check` / `npm run unit`（钉这条的断言在 `tools/doctest.mjs` 的 D4） | 打印 `OK`，rc=0 |
-| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十二组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 372 fail: 0` |
-| 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
+| 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十三组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数、锚点） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数，**带名字的**那几处还要回数被指的那几行里真有这个名字（现推锚点 20 条，由 D13 从文档自己推出来，不是手抄清单；这一族覆盖不到什么见 §七 第 14 条）；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 380 fail: 0` |
+| 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十五把刀，一组一把（D3 三把：少派生一套、版本被抄成字面量、某套的断言条数被抄少一行，是三条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-04 两条腿都跑绿；**原样**跑会被这台机器上一台不属于本仓的孤儿 Chrome 拒，那一轮绿是显式给了 `ALLOW_ORPHAN_CHROME=1` 才开工的，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
 
 一条命令跑全部 node 侧：
@@ -69,7 +69,7 @@ rows: 15 fail: 0     # storage
 `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171）是逻辑腿的地板，交回的条数低于它就 `FAILED=1`，
 所以「少跑一套」「某套少写一半断言」都会红，而不是安静地少几条；`node tools/doctest.mjs` 的 D3 组
 再把每一套自己交回的 `rows: N fail: M` 与这张表**逐套**比一次（改一套的条数而不改文档就是红），
-D12 组再把这道闸自己这一次的条数钉住：**本次实发 372 项**，与它自己最后那行 `rows: 372` 必须是同一个数，
+D12 组再把这道闸自己这一次的条数钉住：**本次实发 380 项**，与它自己最后那行 `rows: 380` 必须是同一个数，
 `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT` 又把这个数复钉一遍 —— 三处任一处对不上就红。
 仓里印这个总数的命令就是文档闸自己（`npm run doctest`，`tools/verify.sh:64` 派生它的那一行）。
 值得一提：那八行与 `deliverable.md:103-110` 记录的那八行**逐字符相同**；每条数字归属哪个套件，
@@ -93,8 +93,8 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 372 项**�
 | `npm test` | `npm run check && npm run unit && npm run doctest`（`package.json:14`） | **跑过**，见 §一 与下面两道新闸 |
 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12`）—— 就是 §一 那条循环，本轮实测展开 35 个文件 | **跑过**，`OK` |
 | `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
-| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十二组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 372 fail: 0` |
-| `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十四把刀各打一份临时副本 | **跑过**，台账见 §四 |
+| `npm run doctest` | `node tools/doctest.mjs`（`package.json:16`）：文档数字闸，十三组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 380 fail: 0` |
+| `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17`）：破坏试验台账，十五把刀各打一份临时副本 | **跑过**，台账见 §四 |
 | `npm run deploy-set` | `node tools/deploy-set.mjs`（`package.json:18`）：部署集闸，按 `tools/assemble-site.sh` 那份清单真拷一遍产物，再对拷出来的东西提要求 | **跑过**，`rows: 68 fail: 0`（42 条引用 / 6 张位图尺寸核对） |
 | `npm run deploy-set:selftest` | `node tools/deploy-set-selftest.mjs`（`package.json:19`）：上面那两颗钉的阳性证明，每一类断言当场被打红一次 | **跑过**，`rc=0`，X1–X12 逐把点名（X13 打 SKIP：这一仓的位图都是文件，那一类由 X7 证） |
 | `npm start` | `node server.cjs`（`package.json:8`），端口取 `argv[2] || process.env.PORT || 5201`（`server.cjs:60`） | 未起服务（浏览器闸本轮禁跑）；端口号是从源码读的 |
@@ -143,10 +143,10 @@ UI 里没有任何第二套「合法」的定义。
 | 文件 | 判什么 | 本轮条数 / 状态 |
 | --- | --- | --- |
 | `tools/bake.mjs`（228 行） | **构建期**门：全宇宙判定 → 逐关独立建表 → 两路必须同判定同胜口 → 可达集必须等于序理想计数 → 写盘前 `encodeBook/decodeBook` 往返必须逐位回来。任何一步不一致直接 `throw`，不落文件（`tools/bake.mjs:46-57,89-105`） | **本轮未执行**（它会覆写 `js/data/lots.js`）。它的前四条对账由只读路线复现：`node test/book.test.mjs` 13/0、`node test/solve.test.mjs` 16/0 |
-| `tools/doctest.mjs`（709 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十二组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 372 fail: 0`（本次实发 372 项，见 §一） |
+| `tools/doctest.mjs`（796 行） | **文档数字闸**：README / DESIGN / deliverable 里印出来的每一个数字都对着代码现算一遍，十三组（D1 census、D2 宇宙与棋书、D3 九套真跑、D4 接线、D5 发货读数、D6 行号引用、D7 逐字文案与文件规格、D8 场景静态点数、D9 墙钟纪律、D10 unpinned 清单、D11 台账对账、D12 自数、D13 锚点）。每一组都先数行数再逐格比，正则一条不命中就是红而不是空转 | `rows: 380 fail: 0`（本次实发 380 项，见 §一） |
 | `tools/harness.mjs`（43 行） | 微型框架：`test()` 排队、`run()` 顺序 await，被拒的 async 测试记成 FAIL 而不是 unhandled rejection（`tools/harness.mjs:12-21,37-43`） | 不自报条数；node 与浏览器两套都靠它输出同形的 `rows: N fail: M` |
 | `tools/playtest.mjs`（592 行） | 裸 CDP 驱动（node 全局 `WebSocket`/`fetch`，无 Playwright）+ 五套页内场景：`@boot @play @routes @save` 四套是页面里跑的 JS，`@pointer` 是唯一一套**必须由真鼠标驱动**的（`tools/playtest.mjs:180-344`，注释在 177-179 说清了为什么页面自己跑不了它） | 见下面「静态点数」段 |
-| `tools/sabotage.mjs`（232 行） | **破坏试验台账**：十四把刀，一组一把（D3 两把：少派生一套、版本被抄成字面量，是两条不同的谎），每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
+| `tools/sabotage.mjs`（237 行） | **破坏试验台账**：十五把刀，一组一把（D3 三把：少派生一套、版本被抄成字面量、某套的断言条数被抄少一行，是三条不同的谎），每把只做一个最小扰动，且只落在 workspace 里的临时副本上（`rsync` 不含 `.git`）；一把算过的条件是闸 rc≠0 **且**有一条 FAIL 行同时点名那一组和那一条断言；脏的工作树直接拒（rc 2），跑完按字节比回靶文件，最后拿不带刀的整副本复跑必须 rc=0 | 台账在本节末尾，末列是脚本读回来的实测 rc |
 | `tools/assemble-site.sh`（31 行） | **上线文件的唯一清单**：`index.html` + `manifest.webmanifest` + `sw.js` + `cp -r css js`，位图目录按存在与否收（本仓是 `assets/`）。以前这几行手抄在 `pages.yml` 的 `run:` 里，清单落后于页面时线上 404 自己的文件而本地全绿 | CI 的 deploy 与本地闸调同一支脚本；`X1` 那把刀砍它必须让闸点名红 |
 | `tools/deploy-set.mjs`（347 行） | **部署集闸**：对拷出来的产物提三组要求——W 清单与页面同源、R 引用可达（从 `index.html` 走模块图 / CSS `url()` / manifest 的 icons/shortcuts / SW 注册点）、P 位图不谎报（声明的 `sizes` == PNG IHDR 真宽高）。引用条数与断言条数钉在文件顶部那对常量里 | 本轮 `rows: 68 fail: 0`，42 条引用 / 6 张位图核对 |
 | `tools/deploy-set-selftest.mjs`（316 行） | 上面那两颗钉的**阳性证明**：把仓复制到临时目录，每一类断言当场被打红一次（X1 清单不收位图目录 … X13 内联位图谎报尺寸），并要求闸**点名**吃掉那一刀；X10 是阴性对照——注释里的假路径不许被算成引用 | 本轮 `rc=0`，X1–X12 各点名变红、X13 因这一仓没有内联位图打 SKIP |
@@ -173,15 +173,15 @@ UI 里没有任何第二套「合法」的定义。
 `model 25`（形状代数与负例）、`anim 6`（固定步长与帧率无关，含反证）、`rng 13`（确定性）、`solve 16`（三条路线 + 反证）、`storage 15`（存档单调性）。
 
 
-### 破坏试验台账（14 把刀）
+### 破坏试验台账（15 把刀）
 
-一份全绿的文档闸只说明「这一轮文档与代码对得上」，它没有说明**闸会不会红**。所以十二组各配一把刀（D3 两把），
+一份全绿的文档闸只说明「这一轮文档与代码对得上」，它没有说明**闸会不会红**。所以十三组各配一把刀（D3 三把），
 每把只做一个最小扰动，而且只落在 workspace 里的**临时副本**上（`rsync -a --exclude .git` 一份树，
 跑完即删；仓里的文件一个字都不动，落刀前后各比一次 `git status`，还要按字节比回落刀前存的那份）。
 一把算过的条件是 **rc≠0 并且输出里有一条 FAIL 行同时点名那一组和那一条断言**——换个说法不算点名。
 针必须在目标文件的**台账行之外**恰好命中一次（命中 0 次或多次都是 ERROR 并停）；工作树脏就直接拒
 （rc 2），所以台账只在提交之后跑。末列那个 rc 由 `tools/sabotage.mjs` 自己从子进程读回来写进这张表，
-人不许抄；十四把都红过之后它再拿一份**不带刀**的整副本复跑同一条命令，必须 rc=0（对照），
+人不许抄；十五把都红过之后它再拿一份**不带刀**的整副本复跑同一条命令，必须 rc=0（对照），
 证明红是那一个扰动造成的而不是环境。`tools/verify.sh:38` 复钉刀数：少一把就是红，不是快一轮。
 
 | 刀 | 这一刀模拟的是 | 打哪个文件 | 针（台账行之外唯一命中） | 改成 | 必须点名的那条断言 | 实测 rc |
@@ -197,9 +197,10 @@ UI 里没有任何第二套「合法」的定义。
 | S9 | 毫秒读数被摘掉了出处（"出处见 §6"没了） | `DESIGN.md` | `耗时 0.03 s——那是读数，出处见 §6 计时量` | `耗时 0.03 s` | D9 DESIGN 前三节里每一处 0.0x s 读数都挂着「出处见 §6」 | 1 |
 | S10 | 钉不住的那句话被从文档里删掉了 | `README.md` | `机器 Darwin 25.6.0 arm64、15 核、node v26.8.1、macOS 26.6.2。` | `''` | D10 unpinned 清单里的那句话还在文档里 | 1 |
 | S11 | 刀被改名，台账与刀谱不再是同一批 | `tools/sabotage.mjs` | `  { id: 'S6',` | `  { id: 'S6x',` | D11a README 台账的把数与 sabotage.mjs 的刀数相同 | 1 |
-| S12 | 闸自己的组数地板被调低（12 → 11） | `tools/doctest.mjs` | `emitted.size === 12` | `emitted.size === 11` | D12a 这道闸自己是十二组 | 1 |
+| S12 | 闸自己的组数地板被调低（13 → 12） | `tools/doctest.mjs` | `emitted.size === 13` | `emitted.size === 12` | D12a 这道闸自己是十三组 | 1 |
 | S13 | `node --test` 少派生一套（九支文件名被削成八支） | `tools/doctest.mjs` | `...SUITE_FILES.map((f) =>` | `...SUITE_FILES.slice(0, 8).map((f) =>` | D3 node --test 跑 SUITE_FILES 派生的那九支 | 1 |
 | S14 | 壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天） | `tools/playtest.mjs` | `c.version === Number('${SHELL_VERSION}')` | `c.version === 1` | D3 @boot 的壳层版本仍从 js/main.js 的常数派生 | 1 |
+| S15 | 文档把拒绝时改写的字段名写成 `lines`，行号仍指在原处 | `README.md` | `只换 `line`（`js/core/game.js:88`）` | `只换 `lines`（`js/core/game.js:88`）` | D13 从文档现推的每一个锚点都坐在被指的那几行里 | ? |
 
 ---
 
@@ -360,7 +361,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
    （D3 那两行 + S13/S14），浏览器腿的读数才第一次可信。
 2. **不承诺「断言的内容有意义」，只承诺「条数少不掉」。** 条数这一半本轮已经钉上了三层：
    `tools/verify.sh:31` 的 `MIN_LOGIC_ROWS`（现值 171，就是九套真跑交回的条数之和，文档闸的 D3
-   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:701` 的 `EXPECT_ROWS` 与
+   拿它当现值比，把地板调低就是那条红）、`tools/doctest.mjs:788` 的 `EXPECT_ROWS` 与
    `tools/verify.sh:34` 的 `DOCTEST_ROWS_WANT`（两道把闸自己的条数钉死，少发一条断言就红，
    含那条自数）、`tools/verify.sh:38` 的 `SABOTAGE_KNIVES_WANT`（刀被删一把就是 verify 红）。
    「少跑一套」也红：文档闸 D3d 断言 `test/` 下恰好九个文件，且九行逐套 `rows:` 要与 §一 承诺表一致。
@@ -416,6 +417,15 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
 13. **发货的棋书就是答案表，这是故意的。** `pages.yml` 会连 `js/data/lots.js` 一起发出去，
     因为页面要靠它实时印「当前判定」。任何人 `F12` 读 419 行里的 `1/0` 就能知道每一口之后是胜是败。
     本仓不承诺「答案不可查」；它承诺的是「答案不是猜的」。
+14. **不承诺每一处行号引用都担保了「那一行写的是什么」。** 三份文档里印了 158 处 `path:NN` 引用，
+    其中不带名字的**裸引用 134 处**：D13 那根锚点腿一条都不核它们，它们只过 D6 的范围检查
+    （那一行落在真实文件的行数里），把行号往旁边挪两行仍然绿。锚点腿管的是**带名字**的那一族——
+    名字由引用相邻的正文现推（「某文件的第几行的某个函数」这种写法），现推锚点 20 条，逐条回数
+    被指的那几行里真有这个名字；台账里的 S15 就是打在这上面的刀，它**只改名字、不改行号**，
+    所以范围腿与手抄清单都看不见它，只有锚点腿认得。剩下的 134 处没有担保：读它们的时候，
+    「那一行到底是不是文档说的那样」是要自己打开文件确认的事，不是文档已经替你核对过的事。
+    这三个数（158 处引用 / 134 处裸引用 / 20 条锚点）也不是抄完就算：D13c 拿这一次真的推出来的
+    条数与处数复比对账，删掉其中任何一个数字都会红。
 
 ---
 

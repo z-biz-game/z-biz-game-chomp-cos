@@ -2,7 +2,7 @@
 // 运行里量出来的那个值"。钉不住的一律进 D10 的 unpinned 清单，并各带一根针——把那句话从文档里
 // 删掉，这道闸必须变红，而不是安静地少一条断言。
 //
-//   node tools/doctest.mjs              跑全部十二组（本地与 CI 是同一条命令）
+//   node tools/doctest.mjs              跑全部十三组（本地与 CI 是同一条命令）
 //   node tools/doctest.mjs | head       调试时可分页，判据仍是最后那行 rows/fail
 //
 // 为什么每一处表格解析都带一条"解析到几行"的断言：正则一条都不命中时，逐格比较循环根本不会
@@ -494,7 +494,7 @@ const CITES = [
   ['tools/verify.sh', /SAB=\$\(node tools\/sabotage\.mjs/, 'tools/verify.sh:81'],
   ['tools/verify.sh', /DOCTEST_ROWS_WANT=\$\{DOCTEST_ROWS_WANT:/, 'tools/verify.sh:34'],
   ['tools/verify.sh', /SABOTAGE_KNIVES_WANT=\$\{SABOTAGE_KNIVES_WANT:/, 'tools/verify.sh:38'],
-  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:701'],
+  ['tools/doctest.mjs', /^const EXPECT_ROWS = \d+;/, 'tools/doctest.mjs:788'],
   ['tools/verify.sh', /print\("rows:"/, 'tools/verify.sh:200'],
   ['tools/verify.sh', /sys\.exit\(1 if d\.get\("fail"\)/, 'tools/verify.sh:203'],
   ['test/fixture.mjs', /Source: the classical Chomp result/, 'test/fixture.mjs:112-113'],
@@ -573,7 +573,7 @@ const fileFacts = [
   ['js/core/anim.js', /固定步长模拟（150 行）/, 150, null],
   ['assets/gen/make_art.py', /（448 行 \/ 19,039 B/, 448, 19039],
   ['tools/playtest.mjs', /（592 行 \/ 38,193 B）/, 592, 38193],
-  ['tools/sabotage.mjs', /（232 行）/, 232, null],
+  ['tools/sabotage.mjs', /（237 行）/, 237, null],
   ['js/data/lots.js', /（本轮实测 15,266 B/, null, 15266],
 ];
 for (const [f, re, wantL, wantB] of fileFacts) {
@@ -681,6 +681,93 @@ for (const r of ledger) {
   ok(/^\d+$/.test(r[7]), 'D11 台账末列那个 rc 是脚本读回来的数字', `${r[1]} · rc=${r[7]}（? 表示这一版台账还没整跑过）`);
 }
 
+// ---------------------------------------------------------------- D13 锚点：那句「第几行有什么名字」坐得对不对
+// 范围那条腿只问「这个行号在不在文件里」——把 `x.js:21-25` 写成 `x.js:23-27` 它照绿，因为两行
+// 都存在。可文档里相当一部分引用是带名字的（「`x.js:21-25` 的 `foo()`」），名字在不在那几行里
+// 才是那句话的真值。这一组不加手抄清单，直接从文档现推：反引号里的 `path:NN[-MM]` 是一张引用，
+// 紧挨着它的那个反引号段就是被指的名字（往后看一段，或往前看一段，中间只许隔「的」「（」这一类
+// 连接符）。锚点的单位是 (文件, 起行, 止行, 名字)：同一处被两份文档各写一次只算一条，重复提及
+// 另计。拿不到名字的裸 `path:NN` 这一组一条都不核，那部分仍只过范围检查——这条腿没覆盖什么写在
+// README §七，不在这段注释里含糊过去。
+const ANCHOR_CITE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css)):(\d+)(?:-(\d+))?$/;
+const IDENT = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+const anchorTok = (body) => {
+  const seg = body.includes('::') ? body.slice(body.lastIndexOf('::') + 2) : body;
+  if (seg.includes('/')) return '';
+  const head = seg.split('(')[0].trim();
+  if (IDENT.test(head)) return head;
+  const lhs = head.split(/[=:]\s/)[0].trim();
+  return IDENT.test(lhs) ? lhs : '';
+};
+const deriveAnchors = (text) => {
+  const spans = [...text.matchAll(/`([^`\n]+)`/g)];
+  const out = [];
+  const seen = new Set();
+  let mentions = 0;
+  for (let i = 0; i < spans.length; i += 1) {
+    const c = ANCHOR_CITE.exec(spans[i][1]);
+    if (!c) continue;
+    let name = '';
+    const nxt = spans[i + 1];
+    if (nxt) {
+      const gap = text.slice(spans[i].index + spans[i][0].length, nxt.index);
+      const g = gap.trim();
+      if (gap.length <= 4 && !gap.includes('\n') && (g === '的' || /^[（(]$/.test(g))) name = anchorTok(nxt[1]);
+    }
+    if (!name && i > 0) {
+      const prv = spans[i - 1];
+      const gap = text.slice(prv.index + prv[0].length, spans[i].index);
+      const g = gap.trim();
+      if (gap.length <= 4 && !gap.includes('\n') && !/\s/.test(prv[1]) && /^[（(]/.test(g)) name = anchorTok(prv[1]);
+    }
+    if (!name) continue;
+    mentions += 1;
+    const from = +c[2];
+    const to = +(c[3] || c[2]);
+    const key = `${c[1]}:${from}-${to}:${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ file: c[1], from, to, name, label: `${c[1]}:${from}${c[3] ? `-${c[3]}` : ''}` });
+  }
+  return { anchors: out, mentions };
+};
+const anchorDrift = (list) => list.filter((d) => {
+  const s = src(d.file);
+  if (!s) return true;
+  if (d.from < 1 || d.to > s.length) return true;
+  return !s.slice(d.from - 1, d.to).join('\n').includes(d.name);
+});
+const derived = deriveAnchors(DOCTEXT);
+const drift = anchorDrift(derived.anchors);
+ok(drift.length === 0, 'D13 从文档现推的每一个锚点都坐在被指的那几行里（行号往旁边挪两行仍然在文件里，范围那条腿看不见这件事）',
+  drift.length ? `漂 ${drift.length} 处：${drift.slice(0, 8).map((d) => `${d.label} 里找不到 ${d.name}`).join('，')}`
+               : `现推 ${derived.anchors.length} 条（另有 ${derived.mentions - derived.anchors.length} 次是同一处的重复提及），全部落回原处；最窄的八条 ${[...derived.anchors].sort((a, b) => (a.to - a.from) - (b.to - b.from)).slice(0, 8).map((d) => `${d.label}=${d.name}`).join(' ')}`);
+ok(derived.anchors.length >= 18, 'D13a 现推锚点的条数地板（引用格式改了、或带名字的写法被删光，这一条先红，不给后面变成空转绿）',
+  `现推 ${derived.anchors.length} 条 / 文档一共 ${citeTotal} 处 ` +
+  `path:NN 引用，其中 ${citeTotal - derived.mentions} 处是不带名字的裸引用`);
+// 阳性对照下在内存里：把一处带名字引用的行号整体往下挪两行，同一套比较必须认它漂。
+// 挑不出可挪的那一处（文件太短、或锚点全落在同一行）也算红——那说明这段只是在重抄文档。
+const citeKeyText = (d) => `${d.file}:${d.from}${d.to !== d.from ? `-${d.to}` : ''}`;
+const shiftedOf = (d) => `${d.file}:${d.from + 2}${d.to !== d.from ? `-${d.to + 2}` : ''}`;
+const movable = [...derived.anchors]
+  .sort((a, b) => (a.to - a.from) - (b.to - b.from))
+  .find((d) => {
+    const text = DOCTEXT.replace(citeKeyText(d), shiftedOf(d));
+    return text !== DOCTEXT && anchorDrift(deriveAnchors(text).anchors).length >= 1;
+  });
+ok(!!movable, 'D13b 内存阳性对照：挑一处带名字的引用把行号往下挪两行，这一套比较必须认它漂（挑不出可挪的就红）',
+  movable ? `挪的是 ${citeKeyText(movable)} 的 ${movable.name} → ${shiftedOf(movable)}，漂 ${anchorDrift(deriveAnchors(DOCTEXT.replace(citeKeyText(movable), shiftedOf(movable))).anchors).length} 处`
+          : '一处都挪不动：要么锚点太少，要么这一格已经不会红了');
+const anchorClaim = all(README, /现推锚点 (\d+) 条/g).map((m) => +m[1]);
+const bareClaim = all(README, /裸引用 (\d+) 处/g).map((m) => +m[1]);
+const citeClaim = all(README, /印了 (\d+) 处 `path:NN` 引用/g).map((m) => +m[1]);
+const bareNow = citeTotal - derived.mentions;
+ok(anchorClaim.length >= 1 && anchorClaim.every((v) => v === derived.anchors.length)
+   && bareClaim.length >= 1 && bareClaim.every((v) => v === bareNow)
+   && citeClaim.length >= 1 && citeClaim.every((v) => v === citeTotal),
+  'D13c 文档抄的那三句「印了 N 处 path:NN 引用」「裸引用 M 处」「现推锚点 K 条」等于这一次真的推出来的数（每一处都得对，删掉其中一个数字同样算红）',
+  `文档 ${citeClaim.join('/') || '（解析不到）'} 处引用 / ${bareClaim.join('/') || '（解析不到）'} 处裸引用 / ${anchorClaim.join('/') || '（解析不到）'} 条锚点 vs 现推 ${citeTotal} / ${bareNow} / ${derived.anchors.length}`);
+
 // ================================================================ D12 自数：这道闸自己发多少项
 // 文档点到 D12，而本组的编号要等它自己第一条 ok() 之后才进 `emitted`——"这一组在不在跑"这件事
 // 只能由"正在跑这一组的代码"来自证。先把自己登记上不是放宽：删掉本组任何一条，D12a 那条
@@ -688,7 +775,7 @@ for (const r of ledger) {
 emitted.add('D12');
 const dMentions = [...new Set(all(DOCTEXT, /(?<![A-Za-z0-9_])D\d+/g).map((x) => x[0]))].map((x) => +x.slice(1));
 ok(dMentions.every((v) => emitted.has(`D${v}`)), 'D12 文档点名的每个 D 编号这一次都真的跑了（删掉一组就会红）', `文档点到 ${dMentions.sort((a, b) => a - b).join(',')} / 其中这一轮没发出：${dMentions.filter((v) => !emitted.has(`D${v}`)).join(',') || '无'}`);
-ok(emitted.size === 12, 'D12a 这道闸自己是十二组：本次发出的 D 标签数必须等于 12', `${emitted.size} 组`);
+ok(emitted.size === 13, 'D12a 这道闸自己是十三组：本次发出的 D 标签数必须等于 13', `${emitted.size} 组`);
 // 最后这三条自己也要被算进文档印的那个总数里，所以先按「发完这三条之后的总数」来比：
 // ok() 的比较发生在 rows 自增**之前**，故 rows + 3 == 印出来的 rows。
 const FINAL = rows + 3;
@@ -698,7 +785,7 @@ const promiseRow = (README.match(/\| `node tools\/doctest\.mjs`[^\n]*?`rows: (\d
 ok(!!promiseRow && +promiseRow === FINAL, 'D12c README 承诺表里这道闸自报的 rows 等于本次实际条数', `文档 ${promiseRow || '（解析不到）'} vs 本次 ${FINAL}`);
 // 自数钉（组织纪律：闸不许靠「少一条断言」变绿）。这一条的比较同样发生在自增之前，
 // 所以常量等于**印出来的总条数**，含这一条自己。verify.sh 再用 DOCTEST_ROWS_WANT 复钉一次。
-const EXPECT_ROWS = 372;
+const EXPECT_ROWS = 380;
 ok(rows + 1 === EXPECT_ROWS, 'D12d 本闸条数 == 文件里钉死的 EXPECT_ROWS（少一条断言就红，含这一条自己）', `EXPECT_ROWS=${EXPECT_ROWS} / 印出来的 rows 必须是它`);
 
 console.log(`\n合计 ${rows} 项，${fail.length} 项失败`);

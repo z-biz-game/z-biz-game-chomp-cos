@@ -1,6 +1,6 @@
 // 破坏试验台账：把每一类谎各写回一份**临时副本**里一遍，看文档闸会不会**点名**变红。
 //
-//   node tools/sabotage.mjs            跑 README「破坏试验台账」里的全部十四把刀
+//   node tools/sabotage.mjs            跑 README「破坏试验台账」里的全部十五把刀
 //   node tools/sabotage.mjs S1 S4      只跑点名的几把（调试用；子集跑不回写台账）
 //
 // 为什么要有这个文件：一份全绿的 doctest 只证明"这一轮文档与代码对得上"，它没有说**闸会不会红**。
@@ -32,7 +32,7 @@ const sh = (cmd, args, opts = {}) => {
 };
 const gitStatus = () => sh('git', ['status', '--porcelain']).out.trim();
 
-// ---- 刀谱：十四把，一组一把（D3 有两把，各打一条不同的谎），每把只做一个最小扰动 ----
+// ---- 刀谱：十五把，一组一把（D3 有三把，各打一条不同的谎），每把只做一个最小扰动 ----
 const KNIVES = [
   { id: 'S1', group: 'D1 census', where: '文档档位表里那一格的候选数被手改了一位', file: 'README.md',
     needle: '| 2 / 4 / 8，≥3 格 | 14 |', repl: '| 2 / 4 / 8，≥3 格 | 15 |',
@@ -67,15 +67,20 @@ const KNIVES = [
   { id: 'S11', group: 'D11 台账对账', where: '刀被改名，台账与刀谱不再是同一批', file: 'tools/sabotage.mjs',
     needle: "  { id: 'S6',", repl: "  { id: 'S6x',",
     expect: 'D11a README 台账的把数与 sabotage.mjs 的刀数相同' },
-  { id: 'S12', group: 'D12 自数', where: '闸自己的组数地板被调低（12 → 11）', file: 'tools/doctest.mjs',
-    needle: 'emitted.size === 12', repl: 'emitted.size === 11',
-    expect: 'D12a 这道闸自己是十二组' },
+  { id: 'S12', group: 'D12 自数', where: '闸自己的组数地板被调低（13 → 12）', file: 'tools/doctest.mjs',
+    needle: 'emitted.size === 13', repl: 'emitted.size === 12',
+    expect: 'D12a 这道闸自己是十三组' },
   { id: 'S13', group: 'D3 套件', where: 'node --test 少派生一套（九支文件名被削成八支）', file: 'tools/doctest.mjs',
     needle: '...SUITE_FILES.map((f) =>', repl: '...SUITE_FILES.slice(0, 8).map((f) =>',
     expect: 'D3 node --test 跑 SUITE_FILES 派生的那九支' },
   { id: 'S14', group: 'D3 套件', where: '壳层版本被抄成字面量塞回场景（VERSION 抬到 2 那一次就是它红了三天）', file: 'tools/playtest.mjs',
     needle: "c.version === Number('${SHELL_VERSION}')", repl: "c.version === 1",
     expect: 'D3 @boot 的壳层版本仍从 js/main.js 的常数派生' },
+  // D13 那一把打的是"名字与行号各写各的"：行号一个字没动（所以范围腿与手抄清单都绿），
+  // 只有"被指的那几行里得真有这个名字"这条腿认得它。
+  { id: 'S15', group: 'D13 锚点', where: '文档把拒绝时改写的字段名写成 `lines`，行号仍指在原处', file: 'README.md',
+    needle: '只换 `line`（`js/core/game.js:88`）', repl: '只换 `lines`（`js/core/game.js:88`）',
+    expect: 'D13 从文档现推的每一个锚点都坐在被指的那几行里' },
 ];
 
 const only = process.argv.slice(2);
