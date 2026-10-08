@@ -708,9 +708,9 @@ for (const r of ledger) {
 // 连接符）。锚点的单位是 (文件, 起行, 止行, 名字)：同一处被两份文档各写一次只算一条，重复提及
 // 另计。拿不到名字的裸 `path:NN` 这一组一条都不核，那部分仍只过范围检查——这条腿没覆盖什么写在
 // README §七，不在这段注释里含糊过去。
-const ANCHOR_CITE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css)):(\d+)(?:-(\d+))?$/;
+const ANCHOR_CITE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css|py|md|webmanifest)):(\d+)(?:-(\d+))?$/;
 // 还有一种写法把行号和名字装在同一个反引号里（`x.js:82 的 EXPECTS`），它也是一张锚点。
-const ANCHOR_INLINE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css)):(\d+)(?:-(\d+))?\s*(?:的|::)\s*([^`]+)$/;
+const ANCHOR_INLINE = /^([\w./-]+\.(?:js|mjs|cjs|sh|json|html|yml|css|py|md|webmanifest)):(\d+)(?:-(\d+))?\s*(?:的|::)\s*([^`]+)$/;
 const IDENT = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
 const anchorTok = (body) => {
   const seg = body.includes('::') ? body.slice(body.lastIndexOf('::') + 2) : body;
