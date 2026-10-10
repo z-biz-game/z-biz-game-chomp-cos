@@ -15,6 +15,8 @@
 //
 // Every scenario reports { rows, fail } in the same shape as tools/harness.mjs, so verify.sh
 // aggregates node suites and browser suites on one line.
+import { readFileSync } from 'node:fs';
+
 const PORT = process.env.CDP_PORT || 9361;
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5201/';
 const SHELL_TIMEOUT = Number(process.env.SHELL_TIMEOUT || 30000);
@@ -22,6 +24,15 @@ const ORIGIN = new URL(BASE).origin;
 const isOurs = (u) => typeof u === 'string' && u.startsWith(ORIGIN);
 const cmd = process.argv[2];
 const arg = process.argv[3];
+
+// The shell version is a fact about js/main.js, not a number worth copying into a scenario: when
+// VERSION went 1 → 2 with the save-shape bump, @boot stayed red for three days while the app was
+// fine. Read it out of the source, and refuse to guess if the line ever changes shape.
+const SHELL_VERSION = (() => {
+  const m = /const VERSION = (\d+);/.exec(readFileSync(new URL('../js/main.js', import.meta.url), 'utf8'));
+  if (!m) throw new Error('playtest: js/main.js 里找不到 `const VERSION = N;`，壳层版本无从核对');
+  return m[1];
+})();
 
 class CDP {
   constructor(ws) {
@@ -541,7 +552,7 @@ const SCENARIOS = {
     const id = c.state.id;
     const raw = JSON.parse(localStorage.getItem(KEY) || 'null');
     rec('the win reaches localStorage, not only memory', !!(raw && raw.records[id] && raw.records[id].won), raw && Object.keys(raw.records || {}));
-    rec('clearing an early lot unlocks the next', raw.unlocked >= 2, { unlocked: raw.unlocked });
+    rec('clearing an early lot unlocks the next', !!raw && raw.unlocked >= 2, { unlocked: raw && raw.unlocked });
 
     // best only goes DOWN: hand the store a worse and a better run directly.
     const g0 = c.state.plies;

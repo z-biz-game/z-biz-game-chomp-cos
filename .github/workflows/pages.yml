@@ -28,6 +28,10 @@ jobs:
       # js/data/lots.js by tools/bake.mjs and shipped as a source file like any other, so the
       # browser never has to solve anything to display a verdict.
       - name: Assemble static site
+        run: bash tools/assemble-site.sh _site
+      - name: Deploy set gate (checks the very _site about to be uploaded)
+        run: node tools/deploy-set.mjs _site
+      - name: Every path index.html and the manifest point at really shipped
         run: |
           mkdir _site
           cp index.html manifest.webmanifest sw.js _site/

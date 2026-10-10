@@ -13,8 +13,10 @@
 # rasterisation saturates the cores and, with no CDP client attached, the process does not exit
 # on its own. This game is plain 2D canvas; default headless is enough.
 #
-#   ./tools/verify.sh                        # node suites + @boot @play @routes @save @pointer
+#   ./tools/verify.sh                        # node suites + 文档闸 + 破坏试验台账，然后浏览器五场景
+#   LOGIC_ONLY=1 ./tools/verify.sh           # 只有 node 那一腿（不碰 Chrome、不占端口）
 #   SKIP_UNIT=1 ./tools/verify.sh            # browser only (what ci.yml's browser job runs)
+#   SKIP_SABOTAGE=1 ./tools/verify.sh        # 跳过台账（它要干净的工作树，改文档改到一半时用这个）
 #   SCENARIOS="pointer" ./tools/verify.sh    # one suite while editing the view
 set -u
 HERE=$(cd "$(dirname "$0")/.." && pwd)
@@ -23,6 +25,77 @@ WEB_PORT=${WEB_PORT:-5201}
 BASE=${BASE_URL:-http://127.0.0.1:$WEB_PORT/}
 SHOTS=${SHOTS_DIR:-/tmp/chomp-shots}
 CHROME=${CHROME_BIN:-}
+# The logic tier has a floor of its own: `tools/doctest.mjs` compares this number against the
+# assertion counts it measures by actually running every suite, so lowering the floor is a change
+# the documentation gate notices. Suites only ever get added, never silently dropped.
+MIN_LOGIC_ROWS=${MIN_LOGIC_ROWS:-171}
+# Re-pin of the documentation gate's own self-count (EXPECT_ROWS inside tools/doctest.mjs): a gate
+# that quietly loses an assertion must not be able to exit 0. Change one, change both.
+DOCTEST_ROWS_WANT=${DOCTEST_ROWS_WANT:-380}
+# The sabotage ledger's knives: one per gate group, each must drive the doc gate red AND name the
+# assertion it killed. Fewer knives printed than this = a knife was deleted, which is a red, not a
+# faster run. The ledger writes its measured rc back into README.md, so it only runs on a clean tree.
+SABOTAGE_KNIVES_WANT=${SABOTAGE_KNIVES_WANT:-15}
+
+# ---- logic tier first: the node suites and the documentation gate, both counted ---------------
+# With LOGIC_ONLY=1 this is the whole run — no Chrome, no ports, nothing to collide with. CI's
+# unit job reaches the same code by calling `node tools/doctest.mjs` directly; the browser job
+# below sets SKIP_UNIT=1 and gets the browser tier on top.
+cd "$HERE"
+FAILED=0
+LOGIC=0
+echo "=== node suites ==="
+# SKIP_UNIT=1 for the browser job in CI: the suites are their own job there.
+if [ -z "${SKIP_UNIT:-}" ]; then
+  for f in test/*.test.mjs; do
+    echo "--- $f"
+    OUT=$(node "$f" 2>&1) || FAILED=1
+    printf '%s\n' "$OUT"
+    N=$(printf '%s\n' "$OUT" | grep '^rows: ' | tail -1 | awk '{print $2}')
+    LOGIC=$((LOGIC + ${N:-0}))
+  done
+  echo "logic assertions counted: $LOGIC (floor $MIN_LOGIC_ROWS)"
+  [ "$LOGIC" -ge "$MIN_LOGIC_ROWS" ] || { echo "too few logic assertions" >&2; FAILED=1; }
+  # The documentation gate: every number printed into README / DESIGN / deliverable is compared
+  # against the value the code reports right now. Pure node, no browser, so it lives in the logic
+  # tier — and it reads the docs, so it runs the same way locally and in CI (`node tools/doctest.mjs`).
+  echo "=== doc numbers ==="
+  DOCS_LOG=$HERE/../_tmp-chomp-doctest.log
+  DOCS=$(node tools/doctest.mjs 2>&1); DOCS_RC=$?
+  # The gate's own rc goes into the artifact and is read back: `printf`/`cat` below would otherwise
+  # be the last command and their 0 would look like the gate's 0.
+  printf '%s\nRC=%s\n' "$DOCS" "$DOCS_RC" > "$DOCS_LOG"
+  printf '%s\n' "$DOCS"
+  DOCS_RC_READ=$(tail -1 "$DOCS_LOG" | tr -d 'RC=')
+  DOCS_ROWS=$(printf '%s\n' "$DOCS" | grep '^rows: ' | tail -1 | awk '{print $2}')
+  echo "doc-number assertions counted: $DOCS_ROWS (pinned DOCTEST_ROWS_WANT=$DOCTEST_ROWS_WANT, rc $DOCS_RC_READ read back from $DOCS_LOG)"
+  [ "$DOCS_RC_READ" = "$DOCS_RC" ] || { echo "doc gate rc 与工件里读回来的不是同一个数" >&2; FAILED=1; }
+  [ "$DOCS_RC" -eq 0 ] || FAILED=1
+  [ "${DOCS_ROWS:-x}" = "$DOCTEST_ROWS_WANT" ] || { echo "doc gate 交了 ${DOCS_ROWS:-?} 条，钉的是 $DOCTEST_ROWS_WANT 条" >&2; FAILED=1; }
+  # The sabotage ledger, wired the same way: rc captured, count pinned, log kept. It cuts each knife
+  # into a throwaway copy of the tree (never the repo), so nothing here is restored by git — and it
+  # stamps the measured rc into README.md, so a run that changes the tree is a run to look at.
+  if [ -z "${SKIP_SABOTAGE:-}" ]; then
+    echo "=== sabotage ledger ==="
+    SAB_LOG=$HERE/../_tmp-chomp-sabotage.log
+    SAB=$(node tools/sabotage.mjs 2>&1); SAB_RC=$?
+    printf '%s\nRC=%s\n' "$SAB" "$SAB_RC" > "$SAB_LOG"
+    printf '%s\n' "$SAB"
+    SAB_RC_READ=$(tail -1 "$SAB_LOG" | tr -d 'RC=')
+    KNIVES=$(printf '%s\n' "$SAB" | grep -c '^  红得住 ')
+    echo "knives proven red and named: $KNIVES (pinned SABOTAGE_KNIVES_WANT=$SABOTAGE_KNIVES_WANT, rc $SAB_RC_READ read back from $SAB_LOG)"
+    [ "$SAB_RC_READ" = "$SAB_RC" ] || { echo "台账 rc 与工件里读回来的不是同一个数" >&2; FAILED=1; }
+    [ "$SAB_RC" -eq 0 ] || { echo "台账 rc=${SAB_RC}（脏树会被它自己拒掉：git status 干净才许跑）" >&2; FAILED=1; }
+    [ "$KNIVES" -eq "$SABOTAGE_KNIVES_WANT" ] || { echo "台账只点红 $KNIVES 把，钉的是 $SABOTAGE_KNIVES_WANT 把" >&2; FAILED=1; }
+    # 幂等：台账回写只动 README 的 rc 末列，同一个数就该一字不改。树上多了东西 = 这一版台账不可重复。
+    git -C "$HERE" status --porcelain | grep -E ' README\.md$' >/dev/null \
+      && { echo "台账把 README 改脏了（第二次跑应当一字不动）" >&2; FAILED=1; }
+  fi
+fi
+if [ -n "${LOGIC_ONLY:-}" ]; then
+  [ $FAILED -eq 0 ] && echo "=== LOGIC GREEN ===" || echo "=== LOGIC FAILURES ABOVE ==="
+  exit $FAILED
+fi
 
 # ---- pre-flight: no other agent's Chrome may be squatting our debug port -------------------
 if lsof -nP -iTCP:"$CDP_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -34,12 +107,12 @@ if lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "web port :$WEB_PORT is already LISTENING — pick WEB_PORT." >&2
   exit 7
 fi
-ORPHANS=$(pgrep -fl "remote-debugging-port" 2>/dev/null | grep -v "$$" | wc -l | tr -d ' ')
+ORPHANS=$(ps -Ao command= | awk '/remote-debugging[-]port/ && !/--type=/' | wc -l | tr -d ' ')  # instances, not processes: helper argvs repeat the flag
 if [ "${ORPHANS}" != "0" ] && [ -z "${ALLOW_ORPHAN_CHROME:-}" ]; then
   echo "$ORPHANS headless Chrome(s) with a remote-debugging-port are already running on this" >&2
   echo "machine. One at a time is the rule; verify that they are yours, then set" >&2
   echo "ALLOW_ORPHAN_CHROME=1 CDP_PORT=<free port> to proceed." >&2
-  pgrep -fl remote-debugging-port >&2 || true
+  ps -Ao pid=,etime=,command= | awk '/remote-debugging[-]port/ && !/--type=/' >&2 || true
   exit 8
 fi
 
@@ -87,23 +160,6 @@ for i in $(seq 1 40); do
 done
 curl -fsS -m 2 "$BASE" >/dev/null 2>&1 || {
   echo "static server never answered on $BASE" >&2; exit 4; }
-
-cd "$HERE"
-FAILED=0
-
-echo "=== node suites ==="
-# SKIP_UNIT=1 for the browser job in CI: the suites are their own job there.
-if [ -z "${SKIP_UNIT:-}" ]; then
-  for f in test/*.test.mjs; do
-    echo "--- $f"
-    node "$f" || FAILED=1
-  done
-  # The shipped bitmaps are generated, so reconcile them against the generator on every run: a
-  # hand-edited PNG or a drifted make_art.py fails here instead of shipping. Needs Pillow; the
-  # generator prints its own reason and exits non-zero, which counts as a failure, not a skip.
-  echo "--- assets/gen/make_art.py --check"
-  python3 "$HERE/assets/gen/make_art.py" --check || FAILED=1
-fi
 
 export CDP_PORT
 export BASE_URL=$BASE
@@ -176,5 +232,10 @@ echo "$CONS" | grep -qE "\[(error|EXCEPTION|log:error)\]" && { echo "console has
 
 kill $WD 2>/dev/null
 wait $WD 2>/dev/null
+# 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑。缺这一步就是「本地全绿、线上 404 自己的
+# manifest / sw.js / 图标」这一整类坏法。它不碰 Chrome，也不读页面，纯查产物。
+echo "=== deploy-set ==="
+node tools/deploy-set.mjs || FAILED=1
+node tools/deploy-set-selftest.mjs || FAILED=1
 [ $FAILED -eq 0 ] && echo "=== ALL GREEN ===" || echo "=== FAILURES ABOVE ==="
 exit $FAILED
