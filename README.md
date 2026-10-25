@@ -9,7 +9,7 @@
 `js/data/lots.js`（`tools/bake.mjs:89-101` 的 `fromBook` 两路对账）。
 
 规则的**出处**这一栏，本仓给不出这一族常见的「日英双源」：玩法四条（毒格在左上、咬右下方整块、
-轮流、被迫咬毒者输）在 `index.html:8`（`description` 一句写完的 meta）、`index.html:81`（`legend` 就是画布下那句操作说明，
+轮流、被迫咬毒者输）在 `index.html:8`（`description` 一句写完的 meta）、`index.html:82`（`legend` 就是画布下那句操作说明，
 含「骷髅格不能主动咬」）、`js/core/shapes.js:1-19` 的 `shape` 口径、`js/core/game.js:6-11` 的 `Terminal` 约定、`DESIGN.md:20-28` 的 `validateShape` 一节
 里全是**仓内自述**，全仓被点名引用的外部结论只有一处 —— 两行情形的必败刻画，
 写在 `test/fixture.mjs:112-113`（`Tweed`，"the classical Chomp result for 2×n bars (Tweed 1908)"）与
@@ -39,7 +39,7 @@
 | 存档的两条单调性，且「被拒绝的存储」不许长得像「空存档」 | `node test/storage.test.mjs` | `best` 只降不升、`unlocked` 只升不降、坏 JSON 降级、`setItem` 抛异常时仍 playable 但 `persistent()===false`；`requireBackend()`（`js/core/storage.js:21-25`）必须**抛** `StorageError` 而不是回 `null` | `rows: 15 fail: 0` |
 | 屏幕上的动效与刷新率无关：30/60/120 Hz 喂同一段秒表，末态逐字段一致 | `node test/anim.test.mjs` | 对齐单位是**步数**不是虚拟秒（272 步 = 68/136/272 帧）；比较的是每粒粒子的 6 个字段，不是「粒子数」这种能被空数组骗过去的量；反证开关 `CHOMP_ANIM=<mutant>` 打在 `js/core/anim.js:79` 的 `accumulator` 那句唯一吃帧 dt 的 `a.accumulator += elapsed` 上 —— 冻结成常数之后必须红（本轮实测红 2 行：`[136,136,136]` 与 `2 ≠ 20`）。**换成变异 per-particle 的 `p.x += p.vx * s` 则六行全绿**，这正是规范 §6 说的假红目标，写在这里是为了让下一轮别再去撞 | `rows: 6 fail: 0` |
 | 发货的每张图都能从仓里的脚本重算出来，图不是手画的、也不是占位符 | `python3 assets/gen/make_art.py --check` | 不自绘、不下载：`assets/gen/make_art.py` 是**唯一**的图源，`--check` 拿 `png_dims`（`assets/gen/make_art.py:383`）读盘上每张图的 IHDR 宽高并与期望表对账；同种子（`SEED_GRAIN = 20260930`）重跑得到同一个 `sha256[:12] = 3f8bac3be94a`。**本机没有 Pillow**（`python3 -c "import PIL"` 报 ModuleNotFoundError），所以这条 `python3` 命令本轮跑不起来 —— 这一格的四项读数与指纹是 `node tools/doctest.mjs` 的 D7 组在 node 里读 IHDR 现量交回的（读 `make_art.py` 的期望表 + 对 `assets/` 逐张 sha256），不是引用旧文档；把这条命令补成能跑不在本轮的可动范围里，写在这里是缺陷而不是省略 | 应存在 18 张 / 缺失 0 / 0字节 0 / 边长≥180 9 张，指纹 `sha256[:12] = 3f8bac3be94a` |
-| 35 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12` 的 `check`），本轮实测展开成 **35 个文件**；`.github/workflows/ci.yml:29` 的 `check` 不再抄这份 glob，Syntax/Suites 两步直接调 `npm run check` / `npm run unit`（钉这条的断言在 `tools/doctest.mjs` 的 D4） | 打印 `OK`，rc=0 |
+| 36 个源文件（.js/.mjs/.cjs）全部语法可解析 | `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check`（`package.json:12` 的 `check`），本轮实测展开成 **36 个文件**；`.github/workflows/ci.yml:29` 的 `check` 不再抄这份 glob，Syntax/Suites 两步直接调 `npm run check` / `npm run unit`（钉这条的断言在 `tools/doctest.mjs` 的 D4） | 打印 `OK`，rc=0 |
 | 文档里印出来的**每一个数字**都等于现在从代码量出来的那个值（十三组：census、宇宙、九套条数、接线、发货读数、行号引用、逐字文案、场景静态点数、墙钟纪律、unpin 清单、台账对账、自数、锚点） | `node tools/doctest.mjs` | 三处文档（README / DESIGN / deliverable）的每一张表先数行数再逐格比现算；行号引用逐条 `lineOf` 回数，**带名字的**那几处还要回数被指的那几行里真有这个名字（**认整词不认子串**，现推锚点 139 条，由 D13 从文档自己推出来，不是手抄清单），没带名字的那一族另外要过「被指的那几行整段不许是空白」那一道（D6c，空行靶子的行号是量出来的不是写死的）；这两道各带一把把自己点名的对照刀，都 AND 进既有那条断言、不新增行；这一族覆盖不到什么见 §七 第 14 条；`npm run check` 的 glob 真展开、九套 node 套件真跑一遍读它们自己交回的 `rows:` | `rows: 380 fail: 0` |
 | 每一类谎都真的能把上面那道闸打红，而且是**点名**红（不是"反正红了"） | `node tools/sabotage.mjs` | 十五把刀，一组一把（D3 三把：少派生一套、版本被抄成字面量、某套的断言条数被抄少一行，是三条不同的谎），每把只做一个最小扰动、且只落在 workspace 里的**临时副本**上（`rsync` 一份不含 `.git` 的树）；一把算过的条件是 rc≠0 **且**输出里有一条 FAIL 行同时点名那一组和那一条断言；跑完拿不带刀的整副本复跑必须 rc=0，台账末列那个 rc 由脚本从子进程读回来 | 见 §四「破坏试验台账」，末列是实测 rc |
 | 页面跑的就是这套引擎，真鼠标落得下口 | `bash tools/verify.sh`（本机 2026-10-04 两条腿都跑绿；**原样**跑会被这台机器上一台不属于本仓的孤儿 Chrome 拒，那一轮绿是显式给了 `ALLOW_ORPHAN_CHROME=1` 才开工的，见 §七第 1 条） | 真 headless Chrome + 裸 CDP：5 套场景（`@boot @play @routes @save @pointer`），任何一行红、或 console 出现 `[EXCEPTION]/[error]/[log:error]/[warning]` 就 `FAILED=1`（`tools/verify.sh:203` 的 `sys.exit(1 if d.get("fail") else 0)` 与 `tools/verify.sh:207-210` 的 `FAILED`（console 断言） | `=== ALL GREEN ===`，rc=0，正常路径 91 行（逐套读数带日期，见 §四 与 §七第 1 条） |
@@ -91,7 +91,7 @@ D12 组再把这道闸自己这一次的条数钉住：**本次实发 380 项**�
 | 命令 | 实际跑的是什么 | 本轮状态 |
 | --- | --- | --- |
 | `npm test` | `npm run check && npm run unit && npm run doctest`（`package.json:14` 的 `test`） | **跑过**，见 §一 与下面两道新闸 |
-| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12` 的 `check`）—— 就是 §一 那条循环，本轮实测展开 35 个文件 | **跑过**，`OK` |
+| `npm run check` | `for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f" \|\| exit 1; done && echo OK`（`package.json:12` 的 `check`）—— 就是 §一 那条循环，本轮实测展开 36 个文件 | **跑过**，`OK` |
 | `npm run unit` | `for f in test/*.test.mjs; do node "$f" \|\| exit 1; done`（`package.json:13` 的 `unit`），九个文件按字母序，任一非零立即中止 | **跑过**，九行 `rows: N fail: 0` |
 | `npm run doctest` | `node tools/doctest.mjs`（`package.json:16` 的 `doctest`）：文档数字闸，十三组，内部把九套真跑一遍再逐处比文档 | **跑过**，`rows: 380 fail: 0` |
 | `npm run sabotage` | `node tools/sabotage.mjs`（`package.json:17` 的 `sabotage`）：破坏试验台账，十五把刀各打一份临时副本 | **跑过**，台账见 §四 |
@@ -293,10 +293,14 @@ js/pwa.js                  注册器（31 行）：file:// 与非浏览器环境
 css/game.css               样式（207 行 / 8,941 B）：safe-area env() 内缩、button 44×44 命中区、
                            暂停幕布、模态、kbd，以及真的 @media (prefers-reduced-motion: reduce)
 js/main.js                 装配层：DOM、路由、存档、暂停/静音/全屏/教学/键盘光标，`window.chomp` 那张闸用的脸
+js/haptics.js              触觉垫片（经典脚本，暴露 window.haptic）：特性探测，iOS Safari 上自动空操作；
+                           js/main.js 只在判定分支上叫它一声（被拒 err / 咬到 tap / 通关 win）
 js/view.js                 canvas 绘制 + 手势几何 + rAF 外壳（cellPoint / pointAt / clampToBar / goneSquares /
                            start / stop / setPaused / spriteReport）
 js/core/anim.js            固定步长模拟（150 行）：SIM_STEP=1/120、MAX_STEPS=20、种子 LCG；`advance` 是 dt 唯一入口
-js/core/audio.js           WebAudio 音色表与**真静音**：静音走 suspend/resume，且在每个 create* 之前判 muted
+js/core/audio.js           WebAudio 音色表与**真静音**：静音走 suspend/resume，且在每个 create* 之前判 muted；
+                           第二道闸是 parked（我们自己挂起了上下文 ⇒ 暂停中不出声）。两道闸都**不问**
+                           「上下文是不是 running」——resume() 是异步的，问它会把玩家的第一声吞掉
 js/core/shapes.js          位置模型：序理想向量、validateShape、legalBites、applyBite、可达集闭包
 js/core/solve.js           穷举 + 记忆化 minimax、全宇宙自底向上表、三条闭式
 js/core/book.js            棋书编解码；lookup 越界**抛异常**；report/winningBitesOf 纯查表
