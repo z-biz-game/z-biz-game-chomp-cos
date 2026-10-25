@@ -466,10 +466,10 @@ const CITES = [
   ['js/core/storage.js', /export function requireBackend/, 'js/core/storage.js:21-25'],
   ['js/core/storage.js', /export function persistent/, 'js/core/storage.js:248-256'],
   ['js/core/anim.js', /a\.accumulator \+= elapsed/, 'js/core/anim.js:79'],
-  ['js/main.js', /function routeTo/, 'js/main.js:46-65'],
-  ['js/main.js', /location\.hash = `#\/random/, 'js/main.js:61'],
-  ['js/main.js', /npm run unit 复算这些数/, 'js/main.js:125'],
-  ['js/main.js', /const par = Math\.max\(1, Math\.ceil\(Math\.log2\(lot\.cells\)\)\)/, 'js/main.js:161'],
+  ['js/main.js', /function routeTo/, 'js/main.js:47-66'],
+  ['js/main.js', /location\.hash = `#\/random/, 'js/main.js:62'],
+  ['js/main.js', /npm run unit 复算这些数/, 'js/main.js:126'],
+  ['js/main.js', /const par = Math\.max\(1, Math\.ceil\(Math\.log2\(lot\.cells\)\)\)/, 'js/main.js:162'],
   ['index.html', /name="description"/, 'index.html:8'],
   ['index.html', /class="legend"/, 'index.html:82'],
   ['server.cjs', /function startServer\(\{ port = 5201/, 'server.cjs:49'],
@@ -568,7 +568,7 @@ ok(DESIGN.includes('不在棋书里') && /不在棋书里/.test(read('js/core/bo
   'D7 文档里引的两条系统措辞（不在棋书里 / 本局已结束）确实写在源码里', 'DESIGN 四 + README 三 · book.js / game.js');
 eq(SH.applyBite([4, 4], [0, 2]).join(','), '2,2', 'D7 README §三 印的 applyBite([4,4],[0,2]) = [2,2] 是真结果');
 eq(SH.applyBite([5, 4, 3], [2, 0]).join(','), '5,4', 'D7 README §三 印的 applyBite([5,4,3],[2,0]) = [5,4] 是真结果');
-ok(README.includes('`par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`') && src('js/main.js')[160].includes('Math.max(1, Math.ceil(Math.log2(lot.cells)))'),
+ok(README.includes('`par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`') && src('js/main.js')[161].includes('Math.max(1, Math.ceil(Math.log2(lot.cells)))'),
   'D7 文档抄的 stars 公式与 main.js 里那句逐字相同', `main.js:${lineOf('js/main.js', /const par = /)}`);
 eq(Math.max(1, Math.ceil(Math.log2(byId['master-01'].cells))), Math.ceil(Math.log2(18)), 'D7 星星那条式子对 master-01（18 格）算得出 5');
 ok(README.includes("hashSeed('chomp-daily:' + YYYY-MM-DD)") || /chomp-daily:/.test(README), 'D7 每日一题的种子串在文档里写对了', `library.js:${lineOf('js/core/library.js', /chomp-daily:/)}`);

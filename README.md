@@ -217,7 +217,7 @@ UI 里没有任何第二套「合法」的定义。
 | `局面数（本关表）` | 该关可达集大小 = 非空子序理想数（`js/core/solve.js:261-275` 的 `subIdealCount`） | `node test/solve.test.mjs` 要求「闭包 BFS」「序理想计数」「矩形闭式 `C(r+w,r)-1`」三个数对同一形状相等 |
 
 那四行字由证明抽屉末尾的 `el.proofmore` 收尾，它印给玩家的是**复现命令本身**而不是第五个数字：
-「复现：node tools/bake.mjs 重烘并重验；npm run unit 复算这些数。」（`js/main.js:125` 的 `proofmore`）。这句话住在页面上，
+「复现：node tools/bake.mjs 重烘并重验；npm run unit 复算这些数。」（`js/main.js:126` 的 `proofmore`）。这句话住在页面上，
 所以它也是一条会被 D7 逐字比的文案 —— 它曾经是 `node --test test/`，而那条命令在 CI 的 node 22 上会把
 九套塌成一条失败项（§一 那一整段说的就是这件事），印在屏幕上等于对玩家说谎，故换成 `npm run unit`。
 另外提醒：`node tools/bake.mjs` 会**覆写 `js/data/lots.js`**（`tools/bake.mjs:221` 的 `writeFileSync`），所以它不是一条只读复跑。
@@ -273,7 +273,7 @@ UI 里没有任何第二套「合法」的定义。
 不是形容词。
 
 **唯一一处不在博弈论口径上的屏幕数字**：结算卡片上的星星。
-`par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`（`js/main.js:161` 的 `par`）是一个纯几何式，
+`par = Math.max(1, Math.ceil(Math.log2(lot.cells)))`（`js/main.js:162` 的 `par`）是一个纯几何式，
 不是表里的量，也没有任何一条断言读它的值（`@pointer` 只把 `stars.textContent` 当 detail 打印，
 `tools/playtest.mjs:244` 的 `end`）。见 §七。
 
@@ -293,8 +293,10 @@ js/pwa.js                  注册器（31 行）：file:// 与非浏览器环境
 css/game.css               样式（207 行 / 8,941 B）：safe-area env() 内缩、button 44×44 命中区、
                            暂停幕布、模态、kbd，以及真的 @media (prefers-reduced-motion: reduce)
 js/main.js                 装配层：DOM、路由、存档、暂停/静音/全屏/教学/键盘光标，`window.chomp` 那张闸用的脸
-js/haptics.js              触觉垫片（经典脚本，暴露 window.haptic）：特性探测，iOS Safari 上自动空操作；
-                           js/main.js 只在判定分支上叫它一声（被拒 err / 咬到 tap / 通关 win）
+js/haptics.js              触觉语义分级件（ES module，导出 haptics 单例）：组织标准件的逐字副本，
+                           三档只有三档 —— 落子（轻）/ 判定正确（中）/ 错误与终局（重）；
+                           特性探测，iOS Safari 上自动空操作；js/main.js 只在判定分支上叫它一声
+                           （咬到 tap / 提示给出必胜口 correct / 被拒、撤销被拒、终局 wrong）
 js/view.js                 canvas 绘制 + 手势几何 + rAF 外壳（cellPoint / pointAt / clampToBar / goneSquares /
                            start / stop / setPaused / spriteReport）
 js/core/anim.js            固定步长模拟（150 行）：SIM_STEP=1/120、MAX_STEPS=20、种子 LCG；`advance` 是 dt 唯一入口
@@ -381,7 +383,7 @@ DESIGN.md / deliverable.md README.md LICENSE .gitignore
    而各档发货的 `states` 也不成序（3–14 / 29–44 / 13–47 / 182–209：`twined` 的 13 就在 `linked` 的 29 之下）——
    它量的是这张表要证多大一片，不是难度。
    档位是按行数与面积分的，不是按可证的难度序分的。
-4. **不承诺结算星级的口径。** 星星来自 `Math.ceil(Math.log2(cells))` 这个几何式（`js/main.js:161` 的 `par`），
+4. **不承诺结算星级的口径。** 星星来自 `Math.ceil(Math.log2(cells))` 这个几何式（`js/main.js:162` 的 `par`），
    不在棋书里，也不在任何断言里；它是屏幕上唯一一个复算不出「博弈论价值」的数字。
    上一版 README 没提这一点，现在明确：它就是个装饰性评分，别引用成难度。
 5. **不承诺规则出处。** 玩法四条是仓内自述，没有任何出版物或网页被钉住；
@@ -483,12 +485,12 @@ URL 形态：**浏览器闸默认只跑一种** —— root 形态 `http://127.0
 `tools/playtest.mjs:23-24` 的 `isOurs` 只按 `new URL(BASE).origin` 匹配页签。
 **本仓没有第二形态**：没有 Pages 前缀那个端口，也没有 `SHAPES=root|prefix|mobile` 那种多腿循环
 （那是同族另两个仓的东西，本仓 `tools/verify.sh` 里 grep 不到 `SHAPES`，也 grep 不到任何
-「每场景该交回几条断言」的 need 列表）。路由是 hash 段的四种，与 `js/main.js:46-65` 的 `routeTo` 逐条对应：
+「每场景该交回几条断言」的 need 列表）。路由是 hash 段的四种，与 `js/main.js:47-66` 的 `routeTo` 逐条对应：
 `#/c/<n>`（战役第 n 关，越界钳到 1..32）、`#/lot/<id>`（认不到的 id 回落战役首关而不是白屏）、
 `#/daily`（`mulberry32(hashSeed('chomp-daily:' + YYYY-MM-DD)).int(DAILY_IDS.length)` 选题，
 `js/core/library.js:106-127` 的 `dailyLot`，任何设备同一天同一根巧克力）、`#/random/<tier>/<seed>`
 （种子串 `chomp-random:<tier>:<seed>`；裸 `#/random` 会把生成的 token 写回地址栏以便分享，
-`js/main.js:61` 的 `location`）。`file://` 打不开：ES module 需要 origin，`server.cjs` 与 `electron/main.cjs`
+`js/main.js:62` 的 `location`）。`file://` 打不开：ES module 需要 origin，`server.cjs` 与 `electron/main.cjs`
 存在的理由都在这句话上。
 
 MIT。

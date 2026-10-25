@@ -15,6 +15,7 @@ import { advance as advanceAnim, createAnim, emitBite, rejectKick, resetTransien
 import { audioState, isMuted, resumeContext, setMuted as setAudioMuted, sfx, suspendContext, unlockAudio } from './core/audio.js';
 import { installWhenReady } from './pwa.js';
 import { createView } from './view.js';
+import { haptics } from './haptics.js';
 
 const VERSION = 2;
 const el = {};
@@ -169,18 +170,13 @@ function paintCard() {
 // 听觉走 js/core/audio.js：被拒是 refuse、咬到是 bite、终局是 win/lose，
 // 提示与撤销各有各的一声（VOICES 里一直有这两声，只是没人叫它们）。
 //
-// 触觉：仓里已经有一份垫片（js/haptics.js，用 <script> 引入，暴露 window.haptic）。
-// 这里**不另造一套**：只在判定分支上叫它一声，让「被拒」与「通关」有各自的档。
+// 触觉走 js/haptics.js —— 组织标准件（lead 模板的逐字副本，ES module）：
+// 只有三档，落子 8ms / 判定正确 26ms / 错误与终局 [14,40,14]。
+// 接线只在**判定分支**上：不再给每个 pointerdown 补一刀 ——「你点了屏幕」
+// 不是反馈，「这一手被拒了」「这条提示真给出一个必胜口」才是。
 //
 // ⚠️ 触觉是补路，不是主路：navigator.vibrate 在 iOS Safari 上不存在，
 //    桌面 Chrome 也需要用户激活且体感很弱 ⇒ 不能拿它顶替听觉。
-function haptic(kind) {
-  try {
-    if (typeof window !== 'undefined' && typeof window.haptic === 'function') window.haptic(kind);
-  } catch (_) {
-    /* 没有这一路就算了：它本来就是补路 */
-  }
-}
 
 // ------------------------------------------------------------------ input
 // A bite is one anchor square; the removed region is the whole quadrant below-and-right of it,
@@ -199,7 +195,8 @@ function commit(anchor) {
     flash(res.rejected);
     rejectKick(anim);
     sfx('refuse');
-    haptic('err');
+    // 触觉分级（003 §0）：这一手被规则拒了 = 判定错误 → 重档 [14,40,14]
+    haptics.wrong();
     view.invalidate();
     view.draw();
     totals();
@@ -211,7 +208,8 @@ function commit(anchor) {
   // evidence about the move rather than decoration laid on top of it.
   emitBite(anim, gone, view.squareRect, { strength: 1 });
   sfx('bite');
-  haptic('tap');
+  // 触觉分级（003 §0）：玩家刚咬下一块（落子）→ 轻档 8ms
+  haptics.tap();
   afterMove();
   return { rejected: null, plies: game.match.plies };
 }
@@ -248,7 +246,8 @@ function settle() {
   }
   if (lot.mode === 'daily') store.markDaily(lot.day, lot.id, { won });
   sfx(won ? 'win' : 'lose');
-  haptic(won ? 'win' : 'err');
+  // 触觉分级（003 §0）：终局是最重的语义时刻（赢/输都在这一档）→ 重档 [14,40,14]
+  haptics.wrong();
 }
 
 let toastTimer = 0;
@@ -459,17 +458,21 @@ el.hint.addEventListener('click', () => {
   }
   el.hintline.textContent = h.line;
   sfx(h.winning ? 'hint' : 'refuse');
-  haptic(h.winning ? 'tap' : 'err');
+  // 触觉分级（003 §0）：提示真给出一个必胜口 = 判定正确 → 中档 26ms；
+  // 「这个局面已经没有胜口」= 玩家刚确认这条路走不通 → 重档 [14,40,14]
+  if (h.winning) haptics.correct(); else haptics.wrong();
   render();
 });
 
 el.undo.addEventListener('click', () => {
   const r = undoRound(game.match);
-  if (r.rejected) { flash(r.rejected); sfx('refuse'); haptic('err'); return; }
+  // 触觉分级（003 §0）：撤销被拒 = 判定错误 → 重档 [14,40,14]
+  if (r.rejected) { flash(r.rejected); sfx('refuse'); haptics.wrong(); return; }
   game.match = { ...r.state, lastBite: null };
   game.preview = null;
   sfx('undo');
-  haptic('tap');
+  // 触觉分级（003 §0）：撤销落定 = 一次玩家操作 → 轻档 8ms
+  haptics.tap();
   render();
 });
 
@@ -482,7 +485,8 @@ el.restart.addEventListener('click', () => {
   game.settled = false;
   flash(`重开：清掉 ${cleared.particles} 粒碎屑、抖动 ${cleared.shake.toFixed(1)}px、累加器 ${(cleared.accumulator * 1000).toFixed(1)}ms`);
   sfx('ui');
-  haptic('tap');
+  // 触觉分级（003 §0）：重开 = 一次玩家操作 → 轻档 8ms
+  haptics.tap();
   render();
 });
 
