@@ -165,6 +165,23 @@ function paintCard() {
     : `对手查的是同一张表：它把 ${encodeShape(lot.shape)} 判成 <b>${lot.winner}</b>必胜，而你交出去的那一口不在 <b>${lot.k}</b> 个必胜首口里。`;
 }
 
+// ------------------------------------------------------------------ feedback
+// 听觉走 js/core/audio.js：被拒是 refuse、咬到是 bite、终局是 win/lose，
+// 提示与撤销各有各的一声（VOICES 里一直有这两声，只是没人叫它们）。
+//
+// 触觉：仓里已经有一份垫片（js/haptics.js，用 <script> 引入，暴露 window.haptic）。
+// 这里**不另造一套**：只在判定分支上叫它一声，让「被拒」与「通关」有各自的档。
+//
+// ⚠️ 触觉是补路，不是主路：navigator.vibrate 在 iOS Safari 上不存在，
+//    桌面 Chrome 也需要用户激活且体感很弱 ⇒ 不能拿它顶替听觉。
+function haptic(kind) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.haptic === 'function') window.haptic(kind);
+  } catch (_) {
+    /* 没有这一路就算了：它本来就是补路 */
+  }
+}
+
 // ------------------------------------------------------------------ input
 // A bite is one anchor square; the removed region is the whole quadrant below-and-right of it,
 // which is exactly what the preview shades. Press, drag, release: the anchor follows the finger
@@ -182,6 +199,7 @@ function commit(anchor) {
     flash(res.rejected);
     rejectKick(anim);
     sfx('refuse');
+    haptic('err');
     view.invalidate();
     view.draw();
     totals();
@@ -193,6 +211,7 @@ function commit(anchor) {
   // evidence about the move rather than decoration laid on top of it.
   emitBite(anim, gone, view.squareRect, { strength: 1 });
   sfx('bite');
+  haptic('tap');
   afterMove();
   return { rejected: null, plies: game.match.plies };
 }
@@ -229,6 +248,7 @@ function settle() {
   }
   if (lot.mode === 'daily') store.markDaily(lot.day, lot.id, { won });
   sfx(won ? 'win' : 'lose');
+  haptic(won ? 'win' : 'err');
 }
 
 let toastTimer = 0;
@@ -386,8 +406,16 @@ function setPaused(on) {
   return game.paused;
 }
 
-el.pause.addEventListener('click', () => { unlockAudio(); setPaused(!game.paused); sfx('ui'); });
-el.resume.addEventListener('click', () => setPaused(false));
+// 暂停这一声要赶在上下文被挂起之前发出去；继续这一声等上下文醒来再发。
+// （挂起与唤醒都是异步的，先发后挂的顺序反了，这一声就会闷在挂起里。）
+el.pause.addEventListener('click', () => {
+  unlockAudio();
+  const next = !game.paused;
+  if (next) sfx('ui');
+  setPaused(next);
+  if (!next) sfx('ui');
+});
+el.resume.addEventListener('click', () => { setPaused(false); sfx('ui'); });
 el.pauserestart.addEventListener('click', () => { setPaused(false); el.restart.click(); });
 
 // Mute goes through js/core/audio.js, which suspends the AudioContext and refuses to build a
@@ -530,14 +558,18 @@ el.hint.addEventListener('click', () => {
     flash('这个局面已经没有胜口');
   }
   el.hintline.textContent = h.line;
+  sfx(h.winning ? 'hint' : 'refuse');
+  haptic(h.winning ? 'tap' : 'err');
   render();
 });
 
 el.undo.addEventListener('click', () => {
   const r = undoRound(game.match);
-  if (r.rejected) { flash(r.rejected); return; }
+  if (r.rejected) { flash(r.rejected); sfx('refuse'); haptic('err'); return; }
   game.match = { ...r.state, lastBite: null };
   game.preview = null;
+  sfx('undo');
+  haptic('tap');
   render();
 });
 
@@ -549,6 +581,8 @@ el.restart.addEventListener('click', () => {
   game.hints = 0;
   game.settled = false;
   flash(`重开：清掉 ${cleared.particles} 粒碎屑、抖动 ${cleared.shake.toFixed(1)}px、累加器 ${(cleared.accumulator * 1000).toFixed(1)}ms`);
+  sfx('ui');
+  haptic('tap');
   render();
 });
 

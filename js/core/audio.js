@@ -7,12 +7,23 @@
 //     a gain to 0 and keeping the oscillators alive is a fake mute and this repo does not do it.
 //   * unmuting calls `resume()`, and the very next bite builds its nodes from scratch.
 //
-// Node-safety: `js/core/*` is imported by `node --test`, where no AudioContext exists. Every
-// entry point degrades to a no-op and reports `available: false` rather than throwing.
+// Two gates, and both of them sit BEFORE any `create*` call:
+//   * `muted` — the player asked for silence: nothing is built, nothing is scheduled.
+//   * `parked` — WE parked the context ourselves (the game is paused): a parked session is silent
+//     for the same reason, and it is parked rather than turned down.
+// The gate deliberately does NOT ask whether the context happens to be "running": `resume()` is
+// async, so on the first gesture — and on Safari/Firefox on every gesture until the context has
+// woken — the state is still 'suspended' at that very instant. Gating on it silently dropped the
+// player's FIRST bite, which is the one they are most likely to refuse. A sound scheduled on a
+// sleeping context plays the moment that context wakes; that is what scheduling is for.
+//
+// Node-safety: the js/core modules are imported by `node --test`, where no AudioContext exists.
+// Every entry point degrades to a no-op and reports `available: false` rather than throwing.
 
 let ctx = null;
 let master = null;
 let muted = false;
+let parked = false;  // we suspended the context ourselves (pause) — a parked session is silent
 let built = 0;    // oscillators ever created — the mute test asserts this stops growing
 
 function AudioCtor() {
@@ -62,12 +73,14 @@ export function isMuted() {
 // Pause and mute share one mechanism — the context is parked, not turned down — but they are
 // separate reasons, so a paused-and-muted session resumes into silence rather than into sound.
 export function suspendContext() {
+  parked = true;
   if (!ctx || typeof ctx.suspend !== 'function' || ctx.state !== 'running') return ctx ? ctx.state : 'none';
   ctx.suspend().catch(() => {});
   return ctx.state;
 }
 
 export function resumeContext() {
+  parked = false;
   if (!ctx || typeof ctx.resume !== 'function' || ctx.state === 'closed') return ctx ? ctx.state : 'none';
   ctx.resume().catch(() => {});
   return ctx.state;
@@ -88,7 +101,7 @@ export function audioState() {
 function voice({ type = 'triangle', from, to, dur = 0.12, peak = 0.5, at = 0 }) {
   if (muted) return null;
   if (!ctx) unlockAudio();
-  if (!ctx || ctx.state !== 'running') return null;
+  if (!ctx || ctx.state === 'closed' || parked) return null;
   const t0 = ctx.currentTime + at;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -109,7 +122,7 @@ function voice({ type = 'triangle', from, to, dur = 0.12, peak = 0.5, at = 0 }) 
 function noise({ dur = 0.09, peak = 0.28, at = 0, cutoff = 1200 }) {
   if (muted) return null;
   if (!ctx) unlockAudio();
-  if (!ctx || ctx.state !== 'running') return null;
+  if (!ctx || ctx.state === 'closed' || parked) return null;
   const t0 = ctx.currentTime + at;
   const frames = Math.max(1, Math.floor(ctx.sampleRate * dur));
   const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
@@ -169,4 +182,5 @@ export function resetAudioForTest() {
   master = null;
   built = 0;
   muted = false;
+  parked = false;
 }

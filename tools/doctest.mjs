@@ -471,7 +471,7 @@ const CITES = [
   ['js/main.js', /npm run unit 复算这些数/, 'js/main.js:125'],
   ['js/main.js', /const par = Math\.max\(1, Math\.ceil\(Math\.log2\(lot\.cells\)\)\)/, 'js/main.js:161'],
   ['index.html', /name="description"/, 'index.html:8'],
-  ['index.html', /class="legend"/, 'index.html:81'],
+  ['index.html', /class="legend"/, 'index.html:82'],
   ['server.cjs', /function startServer\(\{ port = 5201/, 'server.cjs:49'],
   ['server.cjs', /Number\(process\.argv\[2\]\)/, 'server.cjs:60'],
   ['package.json', /"check": "for f in/, 'package.json:12'],
